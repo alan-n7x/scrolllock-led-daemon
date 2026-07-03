@@ -2,8 +2,12 @@
 
 import argparse
 import configparser
+import importlib.util
 import logging
+import os
 import signal
+import subprocess
+import sys
 import time
 from ctypes import CDLL
 from pathlib import Path
@@ -164,6 +168,136 @@ def find_scrolllock_led(led_path: str | None = None) -> Path:
             return brightness
 
     raise RuntimeError("No Scroll Lock LED found")
+
+
+def _check(label: str, status: bool, hint: str = "") -> None:
+    """Print a check result line.
+
+    Args:
+        label: Description of what was checked.
+        status: True for pass, False for fail.
+        hint: Optional suggestion on how to fix.
+    """
+    icon = "✔" if status else "✖"
+    print(f"  {icon} {label}")
+    if not status and hint:
+        for line in hint.strip().split("\n"):
+            print(f"     {line}")
+        print()
+
+
+def run_doctor() -> None:
+    """Run system diagnostics and print results."""
+    print("scrolllock-led-daemon --doctor\n")
+
+    # Python version
+    py_ok = sys.version_info >= (3, 10)
+    _check(
+        f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        py_ok,
+        "Requires Python >= 3.10",
+    )
+
+    # evdev
+    evdev_ok = importlib.util.find_spec("evdev") is not None
+    _check(
+        "evdev installed",
+        evdev_ok,
+        "Install: sudo apt install python3-evdev",
+    )
+
+    if not evdev_ok:
+        return
+
+    # Permission to read input devices
+    input_devices = list_devices()
+    can_read_input = False
+    permission_hint = ""
+    for path in input_devices:
+        try:
+            InputDevice(path)
+            can_read_input = True
+            break
+        except PermissionError:
+            permission_hint = (
+                "Run with sudo or install udev rules:\n"
+                "    sudo ./scripts/install.sh"
+            )
+            continue
+        except OSError:
+            continue
+
+    _check(
+        "Permission to read /dev/input/event*",
+        can_read_input,
+        permission_hint,
+    )
+
+    # Keyboard with Scroll Lock
+    keyboard = None
+    if can_read_input:
+        for path in input_devices:
+            try:
+                dev = InputDevice(path)
+                keys = dev.capabilities().get(ecodes.EV_KEY, [])
+                if ecodes.KEY_SCROLLLOCK in keys:
+                    keyboard = dev
+                    break
+            except (PermissionError, OSError):
+                continue
+
+    _check(
+        f"Keyboard found{' (' + keyboard.name + ')' if keyboard else ''}",
+        keyboard is not None,
+        "Use --device to specify the path manually.",
+    )
+
+    # Permission to write LED
+    led = find_scrolllock_led()
+    can_write_led = led is not None
+    if led:
+        try:
+            led.write_text(led.read_text().strip())
+            can_write_led = True
+        except PermissionError:
+            can_write_led = False
+
+    _check(
+        f"Scroll Lock LED{' (' + str(led) + ')' if led else ''}",
+        can_write_led,
+        "Run with sudo or add user to the input group:\n"
+        "    sudo usermod -aG input $USER",
+    )
+
+    # Configuration file
+    config_loaded = any(p.exists() for p in CONFIG_PATHS)
+    config_paths = "\n".join(f"    {p}" for p in CONFIG_PATHS)
+    _check(
+        "Configuration file",
+        config_loaded,
+        f"Create one of:\n{config_paths}",
+    )
+
+    # systemd service
+    svc = Path("/etc/systemd/system/scrolllock-led-daemon.service")
+    svc_ok = svc.exists()
+    _check(
+        "systemd service installed",
+        svc_ok,
+        "Install: sudo ./scripts/install.sh",
+    )
+
+    if svc_ok:
+        result = subprocess.run(
+            ["systemctl", "is-active", "scrolllock-led-daemon"],
+            capture_output=True, text=True, timeout=5,
+        )
+        active = result.stdout.strip() == "active"
+        _check(
+            f"systemd service: {result.stdout.strip()}",
+            active,
+            "Start: sudo systemctl start scrolllock-led-daemon",
+        )
 
 
 def list_input_devices() -> None:
@@ -355,6 +489,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="List available input devices and exit",
     )
     parser.add_argument(
+        "--doctor",
+        action="store_true",
+        help="Run system diagnostics",
+    )
+    parser.add_argument(
         "--config",
         type=str,
         help="Path to configuration file",
@@ -385,6 +524,10 @@ def main() -> None:
 
     if args.list:
         list_input_devices()
+        return
+
+    if args.doctor:
+        run_doctor()
         return
 
     device = args.device or config.get("device")
