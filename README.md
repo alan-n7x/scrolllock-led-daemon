@@ -9,10 +9,10 @@ Daemon for Linux that synchronizes a key press with the keyboard LED.
 - Runs as a systemd service (`Type=notify`)
 - Auto-reconnects if the keyboard is disconnected
 - One-shot mode: `--set on/off` and `--toggle` for scripts
-- `--list` to discover available input devices
 - Configurable key (`--key`) and LED (`--led`)
 - Configuration file support
 - Very low CPU usage (event driven, not polling)
+- `--doctor` for system diagnostics
 
 ## Requirements
 
@@ -61,6 +61,7 @@ Options:
   --set on|off      Set LED state and exit (one-shot mode)
   --toggle          Toggle LED state and exit (one-shot mode)
   --list            List available input devices and exit
+  --doctor          Run system diagnostics
   --config PATH     Path to configuration file
   --verbose         Enable debug logs
   --version         Show version
@@ -85,6 +86,14 @@ scrolllock-led-daemon --toggle
 
 ```bash
 scrolllock-led-daemon --list
+```
+
+### Diagnostics
+
+Run a system health check:
+
+```bash
+scrolllock-led-daemon --doctor
 ```
 
 ### Custom device
@@ -144,6 +153,26 @@ Then use the exact path:
 
 ```bash
 scrolllock-led-daemon --device /dev/input/event4
+```
+
+## Development
+
+### Dependencies
+
+```bash
+pip install ".[test]"
+```
+
+### Tests
+
+```bash
+make test          # or: python -m pytest tests/ -v
+```
+
+### Syntax check
+
+```bash
+make lint          # or: python -m py_compile src/scrolllock_led_daemon.py
 ```
 
 ## Uninstall

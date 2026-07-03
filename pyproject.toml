@@ -9,5 +9,8 @@ dependencies = [
     "evdev>=1.9.2"
 ]
 
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
 [project.scripts]
 scrolllock-led-daemon = "scrolllock_led_daemon:main"

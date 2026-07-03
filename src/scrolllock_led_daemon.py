@@ -4,10 +4,10 @@ import argparse
 import configparser
 import importlib.util
 import logging
-import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 from ctypes import CDLL
 from pathlib import Path
@@ -15,24 +15,19 @@ from pathlib import Path
 from evdev import InputDevice, ecodes, list_devices
 
 VERSION = "1.0.0"
-_shutdown = False
+_shutdown = threading.Event()
+logger = logging.getLogger(__name__)
 
 CONFIG_PATHS = [
     Path("/etc/scrolllock-led-daemon.conf"),
     Path.home() / ".config" / "scrolllock-led-daemon" / "scrolllock-led-daemon.conf",
 ]
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
-
 
 def _handle_signal(signum: int, frame: object) -> None:
     """Handle termination signals."""
-    global _shutdown
-    logging.info("Received signal %d, shutting down...", signum)
-    _shutdown = True
+    logger.info("Received signal %d, shutting down...", signum)
+    _shutdown.set()
 
 
 def _setup_signal_handlers() -> None:
@@ -80,7 +75,7 @@ def run_daemon_loop(keyboard: InputDevice, led: Path, key_code: int) -> None:
         key_code: The evdev key code to listen for.
     """
     for event in keyboard.read_loop():
-        if _shutdown:
+        if _shutdown.is_set():
             break
 
         if event.type != ecodes.EV_KEY:
@@ -90,7 +85,7 @@ def run_daemon_loop(keyboard: InputDevice, led: Path, key_code: int) -> None:
             enabled = not read_led(led)
             write_led(led, enabled)
 
-            logging.info("Scroll Lock LED: %s", "on" if enabled else "off")
+            logger.info("Scroll Lock LED: %s", "on" if enabled else "off")
 
 
 def find_keyboard(device_path: str | None = None) -> InputDevice:
@@ -110,7 +105,7 @@ def find_keyboard(device_path: str | None = None) -> InputDevice:
     """
     if device_path:
         device = InputDevice(device_path)
-        logging.info("Keyboard: %s (%s)", device.path, device.name)
+        logger.info("Keyboard: %s (%s)", device.path, device.name)
         return device
 
     for path in list_devices():
@@ -122,7 +117,7 @@ def find_keyboard(device_path: str | None = None) -> InputDevice:
         keys = device.capabilities().get(ecodes.EV_KEY, [])
 
         if ecodes.KEY_SCROLLLOCK in keys:
-            logging.debug("Keyboard found: %s (%s)", device.path, device.name)
+            logger.debug("Keyboard found: %s (%s)", device.path, device.name)
             return device
 
     raise RuntimeError(
@@ -157,14 +152,14 @@ def find_scrolllock_led(led_path: str | None = None) -> Path:
         brightness = Path(led_path)
         if not brightness.exists():
             raise RuntimeError(f"LED brightness file not found: {brightness}")
-        logging.debug("Scroll Lock LED: %s", brightness)
+        logger.debug("Scroll Lock LED: %s", brightness)
         return brightness
 
     for led in Path("/sys/class/leds").glob("*scrolllock"):
         brightness = led / "brightness"
 
         if brightness.exists():
-            logging.debug("Scroll Lock LED found: %s", brightness)
+            logger.debug("Scroll Lock LED found: %s", brightness)
             return brightness
 
     raise RuntimeError("No Scroll Lock LED found")
@@ -431,7 +426,7 @@ def load_config(config_path: str | None = None) -> dict:
 
     for path in paths:
         if path.exists():
-            logging.debug("Loading config: %s", path)
+            logger.debug("Loading config: %s", path)
             config.read(path)
 
     result: dict = {}
@@ -519,8 +514,12 @@ def main() -> None:
 
     verbose = args.verbose or config.get("verbose", False)
     if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-        logging.debug("Verbose mode enabled")
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            force=True,
+        )
+        logger.debug("Verbose mode enabled")
 
     if args.list:
         list_input_devices()
@@ -543,32 +542,32 @@ def main() -> None:
 
     if args.set:
         write_led(led, args.set == "on")
-        logging.info("Scroll Lock LED: %s", args.set)
+        logger.info("Scroll Lock LED: %s", args.set)
         return
 
     if args.toggle:
         enabled = not read_led(led)
         write_led(led, enabled)
-        logging.info("Scroll Lock LED: %s", "on" if enabled else "off")
+        logger.info("Scroll Lock LED: %s", "on" if enabled else "off")
         return
 
     _setup_signal_handlers()
 
     _notify_systemd("READY=1")
-    logging.info("Daemon started")
+    logger.info("Daemon started")
 
-    while not _shutdown:
+    while not _shutdown.is_set():
         try:
             keyboard = find_keyboard(device)
             run_daemon_loop(keyboard, led, key_code)
         except (OSError, RuntimeError) as e:
-            if _shutdown:
+            if _shutdown.is_set():
                 break
-            logging.error("Connection lost: %s. Reconnecting in 2 seconds...", e)
+            logger.error("Connection lost: %s. Reconnecting in 2 seconds...", e)
             time.sleep(2)
 
     _notify_systemd("STOPPING=1")
-    logging.info("Daemon stopped")
+    logger.info("Daemon stopped")
 
 
 if __name__ == "__main__":
