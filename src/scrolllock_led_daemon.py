@@ -25,13 +25,22 @@ CONFIG_PATHS = [
 
 
 def _handle_signal(signum: int, frame: object) -> None:
-    """Handle termination signals."""
+    """Handle termination signals.
+
+    Args:
+        signum: Signal number received.
+        frame: Current stack frame (unused).
+    """
     logger.info("Received signal %d, shutting down...", signum)
     _shutdown.set()
 
 
 def _setup_signal_handlers() -> None:
-    """Register signal handlers for graceful shutdown."""
+    """Register signal handlers for graceful shutdown.
+
+    Registers handlers for SIGTERM and SIGINT to allow the daemon
+    to shut down cleanly.
+    """
     signal.signal(signal.SIGTERM, _handle_signal)
     signal.signal(signal.SIGINT, _handle_signal)
 
@@ -182,7 +191,12 @@ def _check(label: str, status: bool, hint: str = "") -> None:
 
 
 def run_doctor() -> None:
-    """Run system diagnostics and print results."""
+    """Run system diagnostics and print results.
+
+    Checks Python version, evdev availability, input device permissions,
+    keyboard detection, LED write access, configuration files, and
+    systemd service status.
+    """
     print("scrolllock-led-daemon --doctor\n")
 
     # Python version
@@ -296,7 +310,12 @@ def run_doctor() -> None:
 
 
 def list_input_devices() -> None:
-    """List all input devices with their capabilities."""
+    """List all input devices with their capabilities.
+
+    Detects keyboards with Scroll/Caps/Num/F12 keys and other input
+    devices, showing device paths, names, supported keys, and LEDs.
+    Handles permission errors gracefully with user-friendly messages.
+    """
     keyboards = []
     others = []
 
@@ -444,7 +463,14 @@ def load_config(config_path: str | None = None) -> dict:
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse command line arguments."""
+    """Parse command line arguments.
+
+    Args:
+        argv: Argument list. Defaults to sys.argv.
+
+    Returns:
+        Parsed arguments as a Namespace object.
+    """
     parser = argparse.ArgumentParser(
         description="Daemon that synchronizes a key press with the keyboard LED."
     )
@@ -507,7 +533,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main() -> None:
-    """Main entry point of the daemon."""
+    """Main entry point of the daemon.
+
+    Parses arguments, loads configuration, and runs in one of four
+    modes: daemon, one-shot (--set/--toggle), --list, or --doctor.
+    """
     args = parse_args()
 
     config = load_config(args.config)
