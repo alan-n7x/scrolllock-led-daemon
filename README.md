@@ -36,6 +36,19 @@ The script installs:
 - `/usr/share/bash-completion/completions/scrolllock-led-daemon.bash`
 - `/etc/scrolllock-led-daemon.conf` (example config)
 
+### Manual install
+
+```bash
+sudo cp src/scrolllock_led_daemon.py /usr/local/bin/scrolllock-led-daemon
+sudo chmod +x /usr/local/bin/scrolllock-led-daemon
+```
+
+### Dependencies
+
+```bash
+sudo apt install python3-evdev
+```
+
 ## Usage
 
 ```text
@@ -100,6 +113,38 @@ verbose = false
 ```
 
 CLI arguments override config file values.
+
+## Troubleshooting
+
+### Permission denied
+
+If you see:
+
+```
+Permission denied while accessing /dev/input/event*
+```
+
+Run with `sudo` or install the udev rules:
+
+```bash
+sudo ./scripts/install.sh
+```
+
+The udev rules give your user access to input devices without root.
+
+### No keyboard found
+
+If auto-detection fails, list available devices:
+
+```bash
+scrolllock-led-daemon --list
+```
+
+Then use the exact path:
+
+```bash
+scrolllock-led-daemon --device /dev/input/event4
+```
 
 ## Uninstall
 

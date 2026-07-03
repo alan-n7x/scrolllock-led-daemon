@@ -110,14 +110,26 @@ def find_keyboard(device_path: str | None = None) -> InputDevice:
         return device
 
     for path in list_devices():
-        device = InputDevice(path)
+        try:
+            device = InputDevice(path)
+        except PermissionError:
+            continue
+
         keys = device.capabilities().get(ecodes.EV_KEY, [])
 
         if ecodes.KEY_SCROLLLOCK in keys:
             logging.debug("Keyboard found: %s (%s)", device.path, device.name)
             return device
 
-    raise RuntimeError("No keyboard with Scroll Lock support found")
+    raise RuntimeError(
+        "No keyboard with Scroll Lock support found.\n"
+        "\n"
+        "If running as a normal user, try:\n"
+        "    sudo scrolllock-led-daemon\n"
+        "\n"
+        "Or install the udev rules:\n"
+        "    sudo ./scripts/install.sh"
+    )
 
 
 def find_scrolllock_led(led_path: str | None = None) -> Path:
@@ -159,10 +171,13 @@ def list_input_devices() -> None:
     keyboards = []
     others = []
 
+    permission_denied = False
+
     for path in list_devices():
         try:
             device = InputDevice(path)
         except PermissionError:
+            permission_denied = True
             continue
 
         caps = device.capabilities()
@@ -190,7 +205,18 @@ def list_input_devices() -> None:
             others.append(entry)
 
     if not keyboards and not others:
-        print("No input devices found.")
+        if permission_denied:
+            print(
+                "Permission denied while accessing /dev/input/event*.\n"
+                "\n"
+                "Try:\n"
+                "    sudo scrolllock-led-daemon --list\n"
+                "\n"
+                "Or install the udev rules:\n"
+                "    sudo ./scripts/install.sh"
+            )
+        else:
+            print("No input devices found.")
         return
 
     if keyboards:

@@ -52,6 +52,26 @@ Per\-user configuration file.
 .TP
 .I /etc/systemd/system/scrolllock\-led\-daemon.service
 systemd service unit.
+.SH EXAMPLES
+List available input devices:
+.IP
+scrolllock\-led\-daemon \-\-list
+.PP
+Run as a daemon (default):
+.IP
+scrolllock\-led\-daemon
+.PP
+Listen for F12 and control capslock LED:
+.IP
+scrolllock\-led\-daemon \-\-key KEY_F12 \-\-led capslock
+.PP
+Set LED on and exit:
+.IP
+scrolllock\-led\-daemon \-\-set on
+.PP
+Use a custom configuration file:
+.IP
+scrolllock\-led\-daemon \-\-config /etc/scrolllock\-led\-daemon.conf
 .SH SIGNALS
 .TP
 .B SIGTERM, SIGINT
