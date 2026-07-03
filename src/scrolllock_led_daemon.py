@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import argparse
 import logging
 from pathlib import Path
 
 from evdev import InputDevice, ecodes, list_devices
 
+VERSION = "1.0.0"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -12,24 +14,36 @@ logging.basicConfig(
 )
 
 
-def find_keyboard() -> InputDevice:
-    for device_path in list_devices():
+def find_keyboard(device_path: str | None = None) -> InputDevice:
+    if device_path:
         device = InputDevice(device_path)
+        logging.info("Keyboard: %s (%s)", device.path, device.name)
+        return device
+
+    for path in list_devices():
+        device = InputDevice(path)
         keys = device.capabilities().get(ecodes.EV_KEY, [])
 
         if ecodes.KEY_SCROLLLOCK in keys:
-            logging.info("Keyboard found: %s (%s)", device.path, device.name)
+            logging.debug("Keyboard found: %s (%s)", device.path, device.name)
             return device
 
     raise RuntimeError("No keyboard with Scroll Lock support found")
 
 
-def find_scrolllock_led() -> Path:
+def find_scrolllock_led(led_path: str | None = None) -> Path:
+    if led_path:
+        brightness = Path(led_path)
+        if not brightness.exists():
+            raise RuntimeError(f"LED brightness file not found: {brightness}")
+        logging.debug("Scroll Lock LED: %s", brightness)
+        return brightness
+
     for led in Path("/sys/class/leds").glob("*scrolllock"):
         brightness = led / "brightness"
 
         if brightness.exists():
-            logging.info("Scroll Lock LED found: %s", brightness)
+            logging.debug("Scroll Lock LED found: %s", brightness)
             return brightness
 
     raise RuntimeError("No Scroll Lock LED found")
@@ -43,9 +57,42 @@ def write_led(led: Path, enabled: bool) -> None:
     led.write_text("1" if enabled else "0")
 
 
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Daemon that synchronizes the Scroll Lock key with the keyboard LED."
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        help="Keyboard device path (e.g. /dev/input/event4)",
+    )
+    parser.add_argument(
+        "--led",
+        type=str,
+        help="LED brightness file (e.g. /sys/class/leds/input4::scrolllock/brightness)",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Enable debug logs",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"scrolllock-led-daemon {VERSION}",
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
-    keyboard = find_keyboard()
-    led = find_scrolllock_led()
+    args = parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.debug("Verbose mode enabled")
+
+    keyboard = find_keyboard(args.device)
+    led = find_scrolllock_led(args.led)
 
     logging.info("Daemon started")
 
