@@ -3,9 +3,10 @@ Description=Scroll Lock LED Daemon
 After=multi-user.target
 
 [Service]
-Type=simple
+Type=notify
+NotifyAccess=main
 ExecStart=/usr/local/bin/scrolllock-led-daemon
-Restart=always
+Restart=on-failure
 RestartSec=2
 User=root
 

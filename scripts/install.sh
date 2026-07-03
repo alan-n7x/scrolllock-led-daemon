@@ -13,6 +13,19 @@ sudo chmod +x /usr/local/bin/scrolllock-led-daemon
 echo "Installing systemd service..."
 sudo cp systemd/scrolllock-led-daemon.service /etc/systemd/system/
 
+echo "Installing man page..."
+sudo mkdir -p /usr/local/share/man/man8
+sudo cp scrolllock-led-daemon.8 /usr/local/share/man/man8/
+sudo mandb &>/dev/null || true
+
+echo "Installing udev rules..."
+sudo cp 99-scrolllock-led-daemon.rules /etc/udev/rules.d/
+sudo udevadm control --reload-rules || true
+
+echo "Installing bash completion..."
+sudo mkdir -p /usr/share/bash-completion/completions
+sudo cp completions/scrolllock-led-daemon.bash /usr/share/bash-completion/completions/
+
 sudo systemctl daemon-reload
 sudo systemctl enable scrolllock-led-daemon
 sudo systemctl restart scrolllock-led-daemon

@@ -1,0 +1,54 @@
+.TH SCROLLLOCK\-LED\-DAEMON 8 "2026-07-03" "1.0.0" "System Administration"
+.SH NAME
+scrolllock\-led\-daemon \- daemon that synchronizes the Scroll Lock key with the keyboard LED
+.SH SYNOPSIS
+.B scrolllock\-led\-daemon
+[\fI\,OPTIONS\/\fR]
+.SH DESCRIPTION
+Scroll Lock LED Daemon monitors the Scroll Lock key for press events
+and toggles the corresponding keyboard LED. It runs as a background
+service managed by systemd. When the keyboard is disconnected, it waits
+and automatically reconnects.
+.SH OPTIONS
+.TP
+.B \-\-device \fI\,PATH\/\fR
+Keyboard device path (e.g. /dev/input/event4).
+Overrides auto\-detection.
+.TP
+.B \-\-led \fI\,PATH\/\fR
+LED brightness file
+(e.g. /sys/class/leds/input4::scrolllock/brightness).
+Overrides auto\-detection.
+.TP
+.B \-\-set \fI\,on|off\/\fR
+Set the LED state and exit (one\-shot mode).
+.TP
+.B \-\-toggle
+Toggle the LED state and exit (one\-shot mode).
+.TP
+.B \-\-verbose
+Enable debug logging.
+.TP
+.B \-\-version
+Show version information and exit.
+.TP
+.B \-h, \-\-help
+Show help message and exit.
+.SH FILES
+.TP
+.I /etc/systemd/system/scrolllock\-led\-daemon.service
+systemd service unit.
+.SH SIGNALS
+.TP
+.B SIGTERM, SIGINT
+Initiate a graceful shutdown.
+.SH EXIT STATUS
+.B 0
+on success, or
+.B 1
+on failure.
+.SH AUTHOR
+Alan Santos
+.SH SEE ALSO
+.BR systemd (1),
+.BR evdev (7)

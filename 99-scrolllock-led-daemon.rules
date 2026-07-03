@@ -1,0 +1,2 @@
+# Allow the scrolllock-led-daemon to access input devices
+KERNEL=="event*", SUBSYSTEM=="input", MODE="0664", TAG+="systemd"

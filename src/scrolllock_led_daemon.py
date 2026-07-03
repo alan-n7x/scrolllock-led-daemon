@@ -2,16 +2,66 @@
 
 import argparse
 import logging
+import signal
+import time
+from ctypes import CDLL
 from pathlib import Path
 
 from evdev import InputDevice, ecodes, list_devices
 
 VERSION = "1.0.0"
+_shutdown = False
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
+
+
+def _handle_signal(signum: int, frame: object) -> None:
+    """Handle termination signals."""
+    global _shutdown
+    logging.info("Received signal %d, shutting down...", signum)
+    _shutdown = True
+
+
+def _setup_signal_handlers() -> None:
+    """Register signal handlers for graceful shutdown."""
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+
+def _notify_systemd(state: str = "READY=1") -> None:
+    """Notify systemd about daemon state changes via sd_notify.
+
+    Args:
+        state: Notification string (e.g. "READY=1", "STOPPING=1").
+    """
+    try:
+        CDLL("libsystemd.so.0").sd_notify(0, state.encode())
+    except OSError:
+        pass
+
+
+def run_daemon_loop(keyboard: InputDevice, led: Path) -> None:
+    """Run the main event loop, processing Scroll Lock key presses.
+
+    Args:
+        keyboard: The keyboard InputDevice to listen on.
+        led: Path to the LED brightness file.
+    """
+    for event in keyboard.read_loop():
+        if _shutdown:
+            break
+
+        if event.type != ecodes.EV_KEY:
+            continue
+
+        if event.code == ecodes.KEY_SCROLLLOCK and event.value == 1:
+            enabled = not read_led(led)
+            write_led(led, enabled)
+
+            logging.info("Scroll Lock LED: %s", "on" if enabled else "off")
 
 
 def find_keyboard(device_path: str | None = None) -> InputDevice:
@@ -117,6 +167,17 @@ def parse_args() -> argparse.Namespace:
         help="LED brightness file (e.g. /sys/class/leds/input4::scrolllock/brightness)",
     )
     parser.add_argument(
+        "--set",
+        type=str,
+        choices=["on", "off"],
+        help="Set LED state and exit (one-shot mode)",
+    )
+    parser.add_argument(
+        "--toggle",
+        action="store_true",
+        help="Toggle LED state and exit (one-shot mode)",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug logs",
@@ -137,20 +198,36 @@ def main() -> None:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Verbose mode enabled")
 
-    keyboard = find_keyboard(args.device)
     led = find_scrolllock_led(args.led)
 
+    if args.set:
+        write_led(led, args.set == "on")
+        logging.info("Scroll Lock LED: %s", args.set)
+        return
+
+    if args.toggle:
+        enabled = not read_led(led)
+        write_led(led, enabled)
+        logging.info("Scroll Lock LED: %s", "on" if enabled else "off")
+        return
+
+    _setup_signal_handlers()
+
+    _notify_systemd("READY=1")
     logging.info("Daemon started")
 
-    for event in keyboard.read_loop():
-        if event.type != ecodes.EV_KEY:
-            continue
+    while not _shutdown:
+        try:
+            keyboard = find_keyboard(args.device)
+            run_daemon_loop(keyboard, led)
+        except (OSError, RuntimeError) as e:
+            if _shutdown:
+                break
+            logging.error("Connection lost: %s. Reconnecting in 2 seconds...", e)
+            time.sleep(2)
 
-        if event.code == ecodes.KEY_SCROLLLOCK and event.value == 1:
-            enabled = not read_led(led)
-            write_led(led, enabled)
-
-            logging.info("Scroll Lock LED: %s", "on" if enabled else "off")
+    _notify_systemd("STOPPING=1")
+    logging.info("Daemon stopped")
 
 
 if __name__ == "__main__":
