@@ -1,10 +1,10 @@
 .PHONY: test test-verbose lint install uninstall clean help
 
 test:
-	python -m pytest tests/ -v
+	PYTHONPATH=src python -m pytest tests/ -v
 
 test-verbose:
-	python -m pytest tests/ -v --tb=long -s
+	PYTHONPATH=src python -m pytest tests/ -v --tb=long -s
 
 lint:
 	python -m py_compile src/scrolllock_led_daemon.py
