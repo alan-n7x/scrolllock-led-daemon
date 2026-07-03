@@ -1,0 +1,13 @@
+[Unit]
+Description=Scroll Lock LED Daemon
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/scrolllock-led-daemon
+Restart=always
+RestartSec=2
+User=root
+
+[Install]
+WantedBy=multi-user.target
