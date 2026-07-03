@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import configparser
 import logging
 import signal
 import time
@@ -11,6 +12,11 @@ from evdev import InputDevice, ecodes, list_devices
 
 VERSION = "1.0.0"
 _shutdown = False
+
+CONFIG_PATHS = [
+    Path("/etc/scrolllock-led-daemon.conf"),
+    Path.home() / ".config" / "scrolllock-led-daemon" / "scrolllock-led-daemon.conf",
+]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -43,12 +49,31 @@ def _notify_systemd(state: str = "READY=1") -> None:
         pass
 
 
-def run_daemon_loop(keyboard: InputDevice, led: Path) -> None:
-    """Run the main event loop, processing Scroll Lock key presses.
+def _resolve_key(key_name: str) -> int:
+    """Convert a key name string to an evdev key code.
+
+    Args:
+        key_name: Key name (e.g. "KEY_SCROLLLOCK", "KEY_F12").
+
+    Returns:
+        The evdev key code.
+
+    Raises:
+        ValueError: If the key name is unknown.
+    """
+    code = getattr(ecodes, key_name, None)
+    if code is None:
+        raise ValueError(f"Unknown key: {key_name}")
+    return code
+
+
+def run_daemon_loop(keyboard: InputDevice, led: Path, key_code: int) -> None:
+    """Run the main event loop, processing key presses.
 
     Args:
         keyboard: The keyboard InputDevice to listen on.
         led: Path to the LED brightness file.
+        key_code: The evdev key code to listen for.
     """
     for event in keyboard.read_loop():
         if _shutdown:
@@ -57,7 +82,7 @@ def run_daemon_loop(keyboard: InputDevice, led: Path) -> None:
         if event.type != ecodes.EV_KEY:
             continue
 
-        if event.code == ecodes.KEY_SCROLLLOCK and event.value == 1:
+        if event.code == key_code and event.value == 1:
             enabled = not read_led(led)
             write_led(led, enabled)
 
@@ -129,6 +154,81 @@ def find_scrolllock_led(led_path: str | None = None) -> Path:
     raise RuntimeError("No Scroll Lock LED found")
 
 
+def list_input_devices() -> None:
+    """List all input devices with their capabilities."""
+    keyboards = []
+    others = []
+
+    for path in list_devices():
+        try:
+            device = InputDevice(path)
+        except PermissionError:
+            continue
+
+        caps = device.capabilities()
+        keys = caps.get(ecodes.EV_KEY, [])
+        leds = caps.get(ecodes.EV_LED, [])
+
+        led_names = []
+        for code in leds:
+            name = ecodes.LED.get(code, f"unknown({code})")
+            led_names.append(name)
+
+        known_keys = {"KEY_SCROLLLOCK", "KEY_CAPSLOCK", "KEY_NUMLOCK", "KEY_F12"}
+        matched = known_keys & {ecodes.KEY.get(k, "") for k in keys}
+
+        entry = {
+            "path": device.path,
+            "name": device.name,
+            "keys": sorted(matched),
+            "leds": led_names,
+        }
+
+        if matched:
+            keyboards.append(entry)
+        else:
+            others.append(entry)
+
+    if not keyboards and not others:
+        print("No input devices found.")
+        return
+
+    if keyboards:
+        print("Keyboards with Scroll / Caps / Num / F12 keys\n")
+        for kb in keyboards:
+            print(f"  Device:  {kb['path']}")
+            print(f"  Name:    {kb['name']}")
+            print(f"  Keys:    {', '.join(kb['keys']) or 'none'}")
+            print(f"  LEDs:    {', '.join(kb['leds']) or 'none'}")
+            print()
+
+    print("Other input devices\n")
+    for dev in others:
+        print(f"  Device:  {dev['path']}")
+        print(f"  Name:    {dev['name']}")
+        print()
+
+
+def find_led_by_name(name: str) -> Path:
+    """Find an LED brightness file by name suffix.
+
+    Args:
+        name: LED name suffix (e.g. "scrolllock", "capslock", "numlock").
+
+    Returns:
+        Path to the brightness file.
+
+    Raises:
+        RuntimeError: If no matching LED is found.
+    """
+    for led in Path("/sys/class/leds").glob(f"*{name}"):
+        brightness = led / "brightness"
+        if brightness.exists():
+            return brightness
+
+    raise RuntimeError(f"No LED found matching: {name}")
+
+
 def read_led(led: Path) -> bool:
     """Read the current LED state.
 
@@ -151,10 +251,47 @@ def write_led(led: Path, enabled: bool) -> None:
     led.write_text("1" if enabled else "0")
 
 
-def parse_args() -> argparse.Namespace:
+def load_config(config_path: str | None = None) -> dict:
+    """Load configuration from INI files.
+
+    Reads from the system config, user config, and optional custom path.
+    Each level overrides the previous.
+
+    Args:
+        config_path: Optional explicit config file path.
+
+    Returns:
+        Dictionary with config values.
+    """
+    config = configparser.ConfigParser(interpolation=None)
+    paths = CONFIG_PATHS[:]
+
+    if config_path:
+        paths.insert(0, Path(config_path))
+
+    for path in paths:
+        if path.exists():
+            logging.debug("Loading config: %s", path)
+            config.read(path)
+
+    result: dict = {}
+
+    if config.has_option("daemon", "device"):
+        result["device"] = config.get("daemon", "device")
+    if config.has_option("daemon", "led"):
+        result["led"] = config.get("daemon", "led")
+    if config.has_option("daemon", "key"):
+        result["key"] = config.get("daemon", "key")
+    if config.has_option("daemon", "verbose"):
+        result["verbose"] = config.getboolean("daemon", "verbose")
+
+    return result
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Daemon that synchronizes the Scroll Lock key with the keyboard LED."
+        description="Daemon that synchronizes a key press with the keyboard LED."
     )
     parser.add_argument(
         "--device",
@@ -164,7 +301,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--led",
         type=str,
-        help="LED brightness file (e.g. /sys/class/leds/input4::scrolllock/brightness)",
+        help=(
+            "LED brightness file or name suffix (e.g. /sys/.../brightness, "
+            "scrolllock, capslock, numlock)"
+        ),
+    )
+    parser.add_argument(
+        "--key",
+        type=str,
+        default="KEY_SCROLLLOCK",
+        help="Key to listen for (default: KEY_SCROLLLOCK)",
     )
     parser.add_argument(
         "--set",
@@ -178,6 +324,16 @@ def parse_args() -> argparse.Namespace:
         help="Toggle LED state and exit (one-shot mode)",
     )
     parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available input devices and exit",
+    )
+    parser.add_argument(
+        "--config",
+        type=str,
+        help="Path to configuration file",
+    )
+    parser.add_argument(
         "--verbose",
         action="store_true",
         help="Enable debug logs",
@@ -187,18 +343,34 @@ def parse_args() -> argparse.Namespace:
         action="version",
         version=f"scrolllock-led-daemon {VERSION}",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main() -> None:
     """Main entry point of the daemon."""
     args = parse_args()
 
-    if args.verbose:
+    config = load_config(args.config)
+
+    verbose = args.verbose or config.get("verbose", False)
+    if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
         logging.debug("Verbose mode enabled")
 
-    led = find_scrolllock_led(args.led)
+    if args.list:
+        list_input_devices()
+        return
+
+    device = args.device or config.get("device")
+    led_value = args.led or config.get("led")
+    key_name = args.key or config.get("key", "KEY_SCROLLLOCK")
+
+    key_code = _resolve_key(key_name)
+
+    if led_value and "/" not in led_value:
+        led = find_led_by_name(led_value)
+    else:
+        led = find_scrolllock_led(led_value)
 
     if args.set:
         write_led(led, args.set == "on")
@@ -218,8 +390,8 @@ def main() -> None:
 
     while not _shutdown:
         try:
-            keyboard = find_keyboard(args.device)
-            run_daemon_loop(keyboard, led)
+            keyboard = find_keyboard(device)
+            run_daemon_loop(keyboard, led, key_code)
         except (OSError, RuntimeError) as e:
             if _shutdown:
                 break

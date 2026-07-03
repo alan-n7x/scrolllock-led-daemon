@@ -18,6 +18,9 @@ sudo mkdir -p /usr/local/share/man/man8
 sudo cp scrolllock-led-daemon.8 /usr/local/share/man/man8/
 sudo mandb &>/dev/null || true
 
+echo "Installing configuration file..."
+sudo cp scrolllock-led-daemon.conf /etc/scrolllock-led-daemon.conf
+
 echo "Installing udev rules..."
 sudo cp 99-scrolllock-led-daemon.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules || true

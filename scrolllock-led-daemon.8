@@ -1,30 +1,38 @@
 .TH SCROLLLOCK\-LED\-DAEMON 8 "2026-07-03" "1.0.0" "System Administration"
 .SH NAME
-scrolllock\-led\-daemon \- daemon that synchronizes the Scroll Lock key with the keyboard LED
+scrolllock\-led\-daemon \- daemon that synchronizes a key press with the keyboard LED
 .SH SYNOPSIS
 .B scrolllock\-led\-daemon
 [\fI\,OPTIONS\/\fR]
 .SH DESCRIPTION
-Scroll Lock LED Daemon monitors the Scroll Lock key for press events
-and toggles the corresponding keyboard LED. It runs as a background
-service managed by systemd. When the keyboard is disconnected, it waits
-and automatically reconnects.
+Scroll Lock LED Daemon listens for a key press and toggles the
+corresponding keyboard LED. It runs as a background service managed
+by systemd. When the keyboard is disconnected, it waits and
+automatically reconnects.
 .SH OPTIONS
 .TP
 .B \-\-device \fI\,PATH\/\fR
 Keyboard device path (e.g. /dev/input/event4).
 Overrides auto\-detection.
 .TP
-.B \-\-led \fI\,PATH\/\fR
-LED brightness file
-(e.g. /sys/class/leds/input4::scrolllock/brightness).
-Overrides auto\-detection.
+.B \-\-led \fI\,PATH|NAME\/\fR
+LED brightness file path or a name suffix such as
+scrolllock, capslock, or numlock.
+.TP
+.B \-\-key \fI\,NAME\/\fR
+Key to listen for (default: KEY_SCROLLLOCK).
 .TP
 .B \-\-set \fI\,on|off\/\fR
 Set the LED state and exit (one\-shot mode).
 .TP
 .B \-\-toggle
 Toggle the LED state and exit (one\-shot mode).
+.TP
+.B \-\-list
+List available input devices and exit.
+.TP
+.B \-\-config \fI\,PATH\/\fR
+Path to configuration file.
 .TP
 .B \-\-verbose
 Enable debug logging.
@@ -35,6 +43,12 @@ Show version information and exit.
 .B \-h, \-\-help
 Show help message and exit.
 .SH FILES
+.TP
+.I /etc/scrolllock\-led\-daemon.conf
+System\-wide configuration file.
+.TP
+.I ~/.config/scrolllock\-led\-daemon/scrolllock\-led\-daemon.conf
+Per\-user configuration file.
 .TP
 .I /etc/systemd/system/scrolllock\-led\-daemon.service
 systemd service unit.

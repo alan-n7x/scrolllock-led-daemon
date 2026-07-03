@@ -1,14 +1,17 @@
 # Scroll Lock LED Daemon
 
-Daemon for Linux that synchronizes the Scroll Lock key with the keyboard LED.
+Daemon for Linux that synchronizes a key press with the keyboard LED.
 
 ## Features
 
 - Auto-detects keyboard and Scroll Lock LED
-- Listens for Scroll Lock key presses and toggles the LED
+- Listens for key presses and toggles the LED
 - Runs as a systemd service (`Type=notify`)
 - Auto-reconnects if the keyboard is disconnected
 - One-shot mode: `--set on/off` and `--toggle` for scripts
+- `--list` to discover available input devices
+- Configurable key (`--key`) and LED (`--led`)
+- Configuration file support
 - Very low CPU usage (event driven, not polling)
 
 ## Requirements
@@ -31,6 +34,7 @@ The script installs:
 - `/usr/local/share/man/man8/scrolllock-led-daemon.8`
 - `/etc/udev/rules.d/99-scrolllock-led-daemon.rules`
 - `/usr/share/bash-completion/completions/scrolllock-led-daemon.bash`
+- `/etc/scrolllock-led-daemon.conf` (example config)
 
 ## Usage
 
@@ -39,9 +43,12 @@ Usage: scrolllock-led-daemon [OPTIONS]
 
 Options:
   --device PATH     Keyboard device path (overrides auto-detection)
-  --led PATH        LED brightness file (overrides auto-detection)
+  --led PATH|NAME   LED brightness file or name (scrolllock, capslock, numlock)
+  --key NAME        Key to listen for (default: KEY_SCROLLLOCK)
   --set on|off      Set LED state and exit (one-shot mode)
   --toggle          Toggle LED state and exit (one-shot mode)
+  --list            List available input devices and exit
+  --config PATH     Path to configuration file
   --verbose         Enable debug logs
   --version         Show version
   --help            Show help
@@ -61,11 +68,38 @@ scrolllock-led-daemon --set off
 scrolllock-led-daemon --toggle
 ```
 
+### List devices
+
+```bash
+scrolllock-led-daemon --list
+```
+
 ### Custom device
 
 ```bash
-scrolllock-led-daemon --device /dev/input/event9 --led /sys/class/leds/input8::scrolllock/brightness
+scrolllock-led-daemon --device /dev/input/event9 --led scrolllock
 ```
+
+### Custom key
+
+```bash
+scrolllock-led-daemon --key KEY_F12 --led capslock
+```
+
+## Configuration
+
+Settings can be persisted in `/etc/scrolllock-led-daemon.conf`
+or `~/.config/scrolllock-led-daemon/scrolllock-led-daemon.conf`:
+
+```ini
+[daemon]
+device = /dev/input/event4
+led = scrolllock
+key = KEY_SCROLLLOCK
+verbose = false
+```
+
+CLI arguments override config file values.
 
 ## Uninstall
 
