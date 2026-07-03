@@ -75,4 +75,4 @@ scrolllock-led-daemon --device /dev/input/event9 --led /sys/class/leds/input8::s
 
 ## License
 
-MIT
+GNU General Public License v3.0
