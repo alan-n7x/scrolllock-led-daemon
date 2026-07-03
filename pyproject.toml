@@ -1,0 +1,13 @@
+[project]
+name = "scrolllock-led-daemon"
+version = "1.0.0"
+description = "Daemon that synchronizes the Scroll Lock key with the keyboard LED on Linux."
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "evdev>=1.9.2"
+]
+
+[project.scripts]
+scrolllock-led-daemon = "scrolllock_led_daemon:main"
