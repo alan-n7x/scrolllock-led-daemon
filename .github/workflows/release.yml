@@ -1,6 +1,7 @@
 name: Release to Launchpad PPA (Imutável & Verificável)
 
 on:
+  workflow_dispatch:
   push:
     tags:
       - 'v*'      # Tags como v1.0.0, v2.0

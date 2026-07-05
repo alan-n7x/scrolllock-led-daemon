@@ -8,6 +8,7 @@ jobs:
   version:
     runs-on: ubuntu-latest
     permissions:
+      actions: write   # Necessário para disparar a workflow de publicação
       contents: write  # Necessário para fazer push de volta
 
     steps:
@@ -46,3 +47,13 @@ jobs:
         run: |
           git push origin main --tags
           git push origin HEAD:refs/release/${{ steps.semantic_release.outputs.new_version }}
+
+      - name: Publish release artifacts
+        if: steps.semantic_release.outputs.new_version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NEW_VERSION: ${{ steps.semantic_release.outputs.new_version }}
+        run: |
+          TAG="v${NEW_VERSION}"
+          gh workflow run release.yml --ref "$TAG"
+          echo "Dispatched Launchpad release workflow for $TAG"
