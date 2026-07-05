@@ -1,5 +1,11 @@
 scrolllock-led-daemon (1.4.7-1) noble; urgency=medium
 
+  * Automated release 1.4.7.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 12:56:04 +0000
+
+scrolllock-led-daemon (1.4.7-1) noble; urgency=medium
+
   * Fix Launchpad build dependency by removing bash-completion:any.
 
  -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 09:30:00 -0300
