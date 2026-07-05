@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.0...v1.4.1) (2026-07-05)
+
+
+### Bug Fixes
+
+* corrige extração da versão do changelog e configura GPG para uso em CI ([0a57aa2](https://github.com/alan-n7x/scrolllock-led-daemon/commit/0a57aa248c1333b9cdbe3bbf11659c9bb60e63d0))
+
 # [1.4.0](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.3.0...v1.4.0) (2026-07-05)
 
 
