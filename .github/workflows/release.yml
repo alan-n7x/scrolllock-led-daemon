@@ -80,6 +80,19 @@ jobs:
             exit 1
           fi
 
+          DEB_DISTRIBUTION=$(dpkg-parsechangelog -l debian/changelog -S Distribution)
+          DEB_MAINTAINER=$(dpkg-parsechangelog -l debian/changelog -S Maintainer)
+
+          if [ "$DEB_DISTRIBUTION" = "UNRELEASED" ]; then
+            echo "::error::debian/changelog ainda está marcado como UNRELEASED."
+            exit 1
+          fi
+
+          if [ "$DEB_MAINTAINER" != "Alan Santos <alan.profissional.dev@gmail.com>" ]; then
+            echo "::error::Maintainer inesperado no debian/changelog: $DEB_MAINTAINER"
+            exit 1
+          fi
+
       - name: Create immutable upstream tarball and separate SBOM
         id: tarball
         run: |
@@ -149,7 +162,6 @@ jobs:
 
           dpkg-buildpackage \
             -S \
-            -d \
             -sa \
             --sign-backend=gpg \
             -k"${{ steps.gpg.outputs.fingerprint }}" \
