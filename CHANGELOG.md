@@ -1,3 +1,10 @@
+## [1.4.4](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.3...v1.4.4) (2026-07-05)
+
+
+### Bug Fixes
+
+* coleta artefatos dentro do workspace ([1724e27](https://github.com/alan-n7x/scrolllock-led-daemon/commit/1724e27e5706295b9bc3dd21fa7726ec416a897b))
+
 ## [1.4.3](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.2...v1.4.3) (2026-07-05)
 
 
