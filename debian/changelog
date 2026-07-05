@@ -1,3 +1,9 @@
+scrolllock-led-daemon (1.0.8-1) unstable; urgency=medium
+
+  * Configura gpg-agent com allow-loopback-pinentry para assinatura no CI.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 00:45:00 -0300
+
 scrolllock-led-daemon (1.0.7-1) unstable; urgency=medium
 
   * Gera .orig.tar.gz antes do debuild para evitar prompt interativo.

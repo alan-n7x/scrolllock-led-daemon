@@ -54,16 +54,17 @@ jobs:
           GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         continue-on-error: true
         run: |
+          mkdir -p ~/.gnupg
+          echo "allow-loopback-pinentry" > ~/.gnupg/gpg-agent.conf
+          gpgconf --kill gpg-agent
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
-          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --passphrase-fd 0 --pinentry-mode loopback --sign /dev/null 2>/dev/null || true
+          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign /dev/null 2>/dev/null || true
 
       - name: Build signed Debian source package
         if: env.GPG_KEY != '' && env.LAUNCHPAD_KEY != ''
         env:
           GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
-          GPG_TTY: /dev/null
           DEBEMAIL: "alan.profissional.dev@gmail.com"
           DEBFULLNAME: "Alan Santos"
         run: |
