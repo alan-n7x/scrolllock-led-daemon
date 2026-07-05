@@ -95,7 +95,7 @@ jobs:
             ${{ github.sha }}
 
           # The SBOM remains separate so it cannot invalidate Debian signatures.
-          syft scan dir:. -o spdx-json > "$SBOM"
+          syft dir:. -o spdx-json > "$SBOM"
 
           echo "tarball_path=$TARBALL" >> "$GITHUB_OUTPUT"
           echo "sbom_path=$SBOM" >> "$GITHUB_OUTPUT"
