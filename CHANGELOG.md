@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.3.0...v1.4.0) (2026-07-05)
+
+
+### Features
+
+* adiciona suporte para disparo manual do workflow de release e publica artefatos de lançamento ([a17ea38](https://github.com/alan-n7x/scrolllock-led-daemon/commit/a17ea38878e2bfb42492dc3234b2e50d4a4f97f5))
+
 # [1.3.0](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.2.1...v1.3.0) (2026-07-05)
 
 
