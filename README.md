@@ -22,28 +22,41 @@ Daemon for Linux that synchronizes a key press with the keyboard LED.
 
 ## Installation
 
+### Pacote .deb (Debian/Ubuntu — recomendado)
+
+Baixe o `.deb` da [página de releases](https://github.com/alan-n7x/scrolllock-led-daemon/releases):
+
+```bash
+sudo apt install ./scrolllock-led-daemon_*.deb
+```
+
+Instala automaticamente como serviço systemd com start imediato.
+
+### PyPI (pip)
+
+```bash
+pip install scrolllock-led-daemon
+```
+
+Apenas o binário — você precisa configurar o systemd e udev manualmente.
+
+### Script manual (desenvolvimento)
+
 ```bash
 git clone https://github.com/alan-n7x/scrolllock-led-daemon.git
 cd scrolllock-led-daemon
 ./scripts/install.sh
 ```
 
-The script installs:
+Instala em `/usr/local/`:
 - `/usr/local/bin/scrolllock-led-daemon`
 - `/etc/systemd/system/scrolllock-led-daemon.service`
 - `/usr/local/share/man/man8/scrolllock-led-daemon.8`
 - `/etc/udev/rules.d/99-scrolllock-led-daemon.rules`
 - `/usr/share/bash-completion/completions/scrolllock-led-daemon.bash`
-- `/etc/scrolllock-led-daemon.conf` (example config)
+- `/etc/scrolllock-led-daemon.conf`
 
-### Manual install
-
-```bash
-sudo cp src/scrolllock_led_daemon.py /usr/local/bin/scrolllock-led-daemon
-sudo chmod +x /usr/local/bin/scrolllock-led-daemon
-```
-
-### Dependencies
+### Dependências
 
 ```bash
 sudo apt install python3-evdev
@@ -176,6 +189,14 @@ make lint          # or: python -m py_compile src/scrolllock_led_daemon.py
 ```
 
 ## Uninstall
+
+### Via .deb
+
+```bash
+sudo apt remove scrolllock-led-daemon
+```
+
+### Via script manual
 
 ```bash
 ./scripts/uninstall.sh
