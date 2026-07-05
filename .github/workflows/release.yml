@@ -78,7 +78,6 @@ jobs:
           echo "${{ secrets.LAUNCHPAD_SSH_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
-          echo "signing_key = 89CF049935855E1E" >> ~/.dput.cf
           dput ppa:alan-n7x/tools ../scrolllock-led-daemon_*_source.changes
         continue-on-error: true
 
