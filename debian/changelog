@@ -1,3 +1,9 @@
+scrolllock-led-daemon (1.0.12-1) noble; urgency=medium
+
+  * Gera source sem assinatura, assina depois com debsign + wrapper.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 01:20:00 -0300
+
 scrolllock-led-daemon (1.0.11-1) noble; urgency=medium
 
   * Corrige wrapper GPG para chave sem passphrase.

@@ -66,7 +66,6 @@ jobs:
         if: env.GPG_PRIVATE_KEY != '' && env.LAUNCHPAD_KEY != ''
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
           DEBEMAIL: "alan.profissional.dev@gmail.com"
           DEBFULLNAME: "Alan Santos"
@@ -80,16 +79,18 @@ jobs:
             scrolllock-led-daemon
           cd scrolllock-led-daemon
           printf '%s\n' '#!/usr/bin/env bash' \
-            'if [ -n "$GPG_PASSPHRASE" ]; then' \
-            '  exec gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" "$@"' \
-            'else' \
-            '  exec gpg --batch --yes --pinentry-mode loopback "$@"' \
-            'fi' \
+            'exec gpg --batch --yes --pinentry-mode loopback "$@"' \
             > "$HOME/gpg-wrapper.sh"
           chmod +x "$HOME/gpg-wrapper.sh"
-          dpkg-buildpackage -S -sa -d \
+          echo "test signing" > /tmp/sign-test.txt
+          "$HOME/gpg-wrapper.sh" \
+            --local-user 22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
+            --clearsign /tmp/sign-test.txt
+          gpg --verify /tmp/sign-test.txt.asc
+          dpkg-buildpackage -S -sa -d -us -uc
+          debsign -p"$HOME/gpg-wrapper.sh" \
             -k22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
-            -p"$HOME/gpg-wrapper.sh"
+            ../scrolllock-led-daemon_*_source.changes
           gpg --verify ../scrolllock-led-daemon_*_source.changes
 
       - name: Upload source package to Launchpad PPA
