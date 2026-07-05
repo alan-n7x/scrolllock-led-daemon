@@ -61,12 +61,13 @@ jobs:
         if: env.GPG_KEY != '' && env.LAUNCHPAD_KEY != ''
         env:
           GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
           GPG_TTY: /dev/null
-        continue-on-error: true
         run: |
           rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo
-          dpkg-buildpackage -S -sa
+          dpkg-buildpackage -S -sa -k89CF049935855E1E
+          gpg --verify ../scrolllock-led-daemon_*_source.changes
 
       - name: Upload source package to Launchpad PPA
         if: env.GPG_KEY != '' && env.LAUNCHPAD_KEY != ''
@@ -79,7 +80,6 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
           dput ppa:alan-n7x/tools ../scrolllock-led-daemon_*_source.changes
-        continue-on-error: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
