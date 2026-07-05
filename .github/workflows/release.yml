@@ -79,18 +79,16 @@ jobs:
             scrolllock-led-daemon
           cd scrolllock-led-daemon
           printf '%s\n' '#!/usr/bin/env bash' \
-            'exec gpg --batch --yes --pinentry-mode loopback "$@"' \
+            'exec gpg --batch --yes --no-tty --pinentry-mode loopback "$@"' \
             > "$HOME/gpg-wrapper.sh"
           chmod +x "$HOME/gpg-wrapper.sh"
-          echo "test signing" > /tmp/sign-test.txt
-          "$HOME/gpg-wrapper.sh" \
-            --local-user 22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
-            --clearsign /tmp/sign-test.txt
-          gpg --verify /tmp/sign-test.txt.asc
+
           dpkg-buildpackage -S -sa -d -us -uc
+
           debsign -p"$HOME/gpg-wrapper.sh" \
             -k22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
             ../scrolllock-led-daemon_*_source.changes
+
           gpg --verify ../scrolllock-led-daemon_*_source.changes
 
       - name: Upload source package to Launchpad PPA
