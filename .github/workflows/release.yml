@@ -27,7 +27,7 @@ jobs:
       - name: Build .deb package
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq debhelper dh-python python3-all python3-setuptools
+          sudo apt-get install -y -qq build-essential debhelper dh-python python3-all python3-setuptools
           dpkg-buildpackage -us -uc -b
 
       - name: Create Release
