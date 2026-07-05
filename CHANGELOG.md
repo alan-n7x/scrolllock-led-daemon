@@ -1,3 +1,10 @@
+## [1.4.8](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.7...v1.4.8) (2026-07-05)
+
+
+### Bug Fixes
+
+* adiciona dependência build-essential ao workflow de release ([f87bb33](https://github.com/alan-n7x/scrolllock-led-daemon/commit/f87bb33c0cb6256b7d5337091294190b960c25ca))
+
 ## [1.4.7](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.6...v1.4.7) (2026-07-05)
 
 
