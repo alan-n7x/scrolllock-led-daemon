@@ -24,11 +24,34 @@ jobs:
           pip install build
           python -m build
 
-      - name: Build .deb package
+      - name: Build .deb package (binary)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential debhelper dh-python python3-all python3-setuptools
           dpkg-buildpackage -us -uc -b
+
+      - name: Install devscripts for source build
+        run: |
+          sudo apt-get install -y -qq devscripts
+
+      - name: Build Debian source package
+        run: |
+          cd ..
+          debuild -S -sa -d
+        env:
+          DEBEMAIL: "alan.profissional.dev@gmail.com"
+          DEBFULLNAME: "Alan Santos"
+
+      - name: Upload source package to Launchpad PPA
+        if: ${{ secrets.LAUNCHPAD_SSH_KEY != '' }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.LAUNCHPAD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
+          echo "signing_key = 89CF049935855E1E" >> ~/.dput.cf
+          dput ppa:alan-n7x/scrolllock-led-daemon ../scrolllock-led-daemon_*_source.changes
+        continue-on-error: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -40,11 +63,19 @@ jobs:
             ### Downloads
             - Python package (PyPI): `pip install scrolllock-led-daemon`
             - `.deb` package attached below for Debian/Ubuntu
+            - PPA: `sudo add-apt-repository ppa:alan-n7x/scrolllock-led-daemon`
 
             ### Installation via .deb
             ```bash
             sudo dpkg -i scrolllock-led-daemon_*.deb
             sudo apt install -f
+            ```
+
+            ### Installation via PPA
+            ```bash
+            sudo add-apt-repository ppa:alan-n7x/scrolllock-led-daemon
+            sudo apt update
+            sudo apt install scrolllock-led-daemon
             ```
 
             ### Changelog
