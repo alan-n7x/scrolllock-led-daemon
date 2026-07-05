@@ -144,10 +144,10 @@ jobs:
 
           # Configura dput para Launchpad (usa credenciais padrões do sistema)
           # Você PRECISA ter configurado ~/.dput.cf manualmente uma vez (veja instruções abaixo)
-          dput ppa:~${{ secrets.LP_LAUNCHPAD_ID }}/ppa "$CHANGES_FILE"
+          dput ppa:~${{ secrets.LP_LAUNCHPAD_ID }}/tools "$CHANGES_FILE"
 
-          echo "✅ Upload concluído para Launchpad PPA: ~${{ secrets.LP_LAUNCHPAD_ID }}/ppa"
-          echo "🔗 Acompanhe o build em: https://launchpad.net/~${{ secrets.LP_LAUNCHPAD_ID }}/+archive/ubuntu/ppa"
+          echo "✅ Upload concluído para Launchpad PPA: ~${{ secrets.LP_LAUNCHPAD_ID }}/tools"
+          echo "🔗 Acompanhe o build em: https://launchpad.net/~${{ secrets.LP_LAUNCHPAD_ID }}/+archive/ubuntu/tools"
 
       - name: Cleanup (optional)
         if: always()
