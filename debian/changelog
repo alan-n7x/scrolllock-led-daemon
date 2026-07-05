@@ -1,5 +1,7 @@
-scrolllock-led-daemon (1.0.0-1) unstable; urgency=medium
+scrolllock-led-daemon (1.0.1-1) unstable; urgency=medium
 
-  * Initial release.
+  * CI/CD automatizado com GitHub Actions.
+  * Publicação no PyPI.
+  * Publicação no Launchpad PPA.
 
- -- Alan Santos <alan.profissional.dev@gmail.com>  Sat, 04 Jul 2026 00:00:00 -0300
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sat, 04 Jul 2026 21:30:00 -0300
