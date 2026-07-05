@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.1...v1.4.2) (2026-07-05)
+
+
+### Bug Fixes
+
+* corrige comando do Syft na geração do SBOM ([1bdc4da](https://github.com/alan-n7x/scrolllock-led-daemon/commit/1bdc4da3e92f96f6e9704fdfd03e406607949875))
+
 ## [1.4.1](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.0...v1.4.1) (2026-07-05)
 
 
