@@ -1,0 +1,202 @@
+name: GitHub Release Assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag (for example: v1.5.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and attach release assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t TAGS < <(
+            gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" \
+              --jq '.[].name'
+          )
+
+          if [ -n "$INPUT_TAG" ]; then
+            TAG="$INPUT_TAG"
+            if ! printf '%s\n' "${TAGS[@]}" | grep -Fxq -- "$TAG"; then
+              echo "::error::Tag '$TAG' was not found in the repository."
+              exit 1
+            fi
+          else
+            TAG=$(
+              printf '%s\n' "${TAGS[@]}" \
+                | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' \
+                | sort -V \
+                | tail -n 1
+            ) || true
+          fi
+
+          if [ -z "${TAG:-}" ]; then
+            echo '::error::No semantic-version tag was found.'
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved release tag: $TAG"
+
+      - name: Check out release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          persist-credentials: false
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Python build tooling
+        run: python -m pip install --upgrade build
+
+      - name: Install Debian build tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            bash-completion \
+            build-essential \
+            debhelper \
+            devscripts \
+            dh-python \
+            dh-sequence-bash-completion \
+            gnupg \
+            python3-all \
+            python3-setuptools
+
+      - name: Build Python distributions
+        run: python -m build
+
+      - name: Build Debian binary package
+        run: dpkg-buildpackage -b -us -uc
+
+      - name: Collect release assets and generate checksums
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          WHEELS=(dist/*.whl)
+          SDISTS=(dist/*.tar.gz)
+          DEBS=(../scrolllock-led-daemon_*.deb)
+
+          if [ "${#WHEELS[@]}" -eq 0 ]; then
+            echo '::error::No wheel was generated.'
+            exit 1
+          fi
+          if [ "${#SDISTS[@]}" -eq 0 ]; then
+            echo '::error::No source distribution was generated.'
+            exit 1
+          fi
+          if [ "${#DEBS[@]}" -eq 0 ]; then
+            echo '::error::No Debian binary package was generated.'
+            exit 1
+          fi
+
+          mkdir -p release-assets
+          cp -- "${WHEELS[@]}" "${SDISTS[@]}" "${DEBS[@]}" release-assets/
+
+          cd release-assets
+          mapfile -d '' -t ASSETS < <(
+            find . -maxdepth 1 -type f ! -name 'SHA256SUMS*' \
+              -printf '%f\0' | sort -z
+          )
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo '::error::No release assets were collected.'
+            exit 1
+          fi
+          sha256sum -- "${ASSETS[@]}" > SHA256SUMS
+
+      - name: Import GPG signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo '::error::The GPG_PRIVATE_KEY repository secret is not configured.'
+            exit 1
+          fi
+
+          mkdir -p "$HOME/.gnupg"
+          chmod 700 "$HOME/.gnupg"
+          printf '%s\n' 'allow-loopback-pinentry' > "$HOME/.gnupg/gpg-agent.conf"
+          printf '%s\n' 'pinentry-mode loopback' > "$HOME/.gnupg/gpg.conf"
+          gpgconf --kill gpg-agent
+
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_FINGERPRINT=$(gpg --batch --with-colons --list-secret-keys \
+            | awk -F: '$1 == "fpr" { print $10; exit }')
+
+          if [ -z "$KEY_FINGERPRINT" ]; then
+            echo '::error::No secret GPG key was imported.'
+            exit 1
+          fi
+
+          echo "fingerprint=$KEY_FINGERPRINT" >> "$GITHUB_OUTPUT"
+
+      - name: Sign SHA256SUMS
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+
+          if ! gpg \
+            --batch \
+            --yes \
+            --pinentry-mode loopback \
+            --passphrase "$GPG_PASSPHRASE" \
+            --local-user "${{ steps.gpg.outputs.fingerprint }}" \
+            --armor \
+            --detach-sign \
+            --output release-assets/SHA256SUMS.asc \
+            release-assets/SHA256SUMS; then
+            echo '::error::Failed to sign SHA256SUMS.'
+            exit 1
+          fi
+
+          gpg --batch --verify \
+            release-assets/SHA256SUMS.asc \
+            release-assets/SHA256SUMS
+
+      - name: Create or update GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          fail_on_unmatched_files: true
+          files: release-assets/*
+          body: |
+            Stable release of scrolllock-led-daemon.
+
+            Published on:
+
+            - PyPI: `pip install scrolllock-led-daemon`
+            - Launchpad PPA: `sudo add-apt-repository ppa:alan-n7x/tools`
+            - APT: `sudo apt install scrolllock-led-daemon`
+
+            Assets below are provided for convenience.
+
+            Verification:
+
+            ```bash
+            gpg --verify SHA256SUMS.asc SHA256SUMS
+            sha256sum -c SHA256SUMS
+            ```
