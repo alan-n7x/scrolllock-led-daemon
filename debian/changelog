@@ -1,3 +1,9 @@
+scrolllock-led-daemon (1.3.0-1) noble; urgency=medium
+
+  * Automated release 1.3.0.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 05:45:40 +0000
+
 scrolllock-led-daemon (1.2.1-1) noble; urgency=medium
 
   * Automated release 1.2.1.

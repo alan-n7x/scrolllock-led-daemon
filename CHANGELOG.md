@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.2.1...v1.3.0) (2026-07-05)
+
+
+### Features
+
+* adiciona script gpg-ci-wrapper.sh para gerenciamento de chaves GPG em CI e atualiza workflow de release ([6c8fbd9](https://github.com/alan-n7x/scrolllock-led-daemon/commit/6c8fbd907f1884341d106e91797464f01852bada))
+
 ## [1.2.1](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.2.0...v1.2.1) (2026-07-05)
 
 
