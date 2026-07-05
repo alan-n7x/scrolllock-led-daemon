@@ -52,6 +52,7 @@ jobs:
         if: env.GPG_KEY != ''
         env:
           GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+        continue-on-error: true
         run: |
           echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
           echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --passphrase-fd 0 --pinentry-mode loopback --sign /dev/null 2>/dev/null || true
@@ -62,6 +63,7 @@ jobs:
           GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
           GPG_TTY: /dev/null
+        continue-on-error: true
         run: |
           rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo
           dpkg-buildpackage -S -sa
