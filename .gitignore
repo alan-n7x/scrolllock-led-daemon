@@ -209,6 +209,15 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Debian build artifacts
+debian/.debhelper/
+debian/debhelper-build-stamp
+debian/files
+debian/*.debhelper.log
+debian/*.substvars
+debian/scrolllock-led-daemon/
+../scrolllock-led-daemon_*
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

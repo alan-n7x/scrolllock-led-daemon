@@ -1,4 +1,0 @@
-./scrolllock-led-daemon.conf
-./systemd/scrolllock-led-daemon.service
-./99-scrolllock-led-daemon.rules
-./scrolllock-led-daemon.8
