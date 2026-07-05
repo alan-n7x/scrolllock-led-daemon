@@ -1,3 +1,5 @@
+## [1.4.10](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.9...v1.4.10) (2026-07-05)
+
 ## [1.4.9](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.8...v1.4.9) (2026-07-05)
 
 

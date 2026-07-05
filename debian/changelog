@@ -1,3 +1,9 @@
+scrolllock-led-daemon (1.4.10-1) noble; urgency=medium
+
+  * Automated release 1.4.10.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 13:50:18 +0000
+
 scrolllock-led-daemon (1.5.0-1) noble; urgency=medium
 
   * Synchronize PyPI and Debian package versions.
