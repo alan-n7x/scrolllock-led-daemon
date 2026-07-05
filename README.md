@@ -2,6 +2,17 @@
 
 Daemon for Linux that synchronizes a key press with the keyboard LED.
 
+## Project status
+
+This project is stable and feature-complete.
+
+It is published on:
+
+- PyPI: `pip install scrolllock-led-daemon`
+- Launchpad PPA / APT: `sudo apt install scrolllock-led-daemon`
+
+Future work will focus on maintenance, bug fixes, and compatibility updates.
+
 ## Features
 
 - Auto-detects keyboard and Scroll Lock LED
