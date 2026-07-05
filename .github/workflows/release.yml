@@ -41,11 +41,11 @@ jobs:
 
       - name: Build .deb package (binary)
         run: |
-          dpkg-buildpackage -us -uc -b
+          dpkg-buildpackage -us -uc -b -d
 
       - name: Build Debian source package (unsigned)
         run: |
-          dpkg-buildpackage -S -sa -us -uc
+          dpkg-buildpackage -S -sa -us -uc -d
         continue-on-error: true
 
       - name: Import GPG key for signing
@@ -83,7 +83,7 @@ jobs:
             'exec gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" "$@"' \
             > "$HOME/gpg-wrapper.sh"
           chmod +x "$HOME/gpg-wrapper.sh"
-          dpkg-buildpackage -S -sa \
+          dpkg-buildpackage -S -sa -d \
             -k22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
             -p"$HOME/gpg-wrapper.sh"
           gpg --verify ../scrolllock-led-daemon_*_source.changes
