@@ -23,7 +23,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pytest build
+          pip install -e ".[test]" build
           sudo apt-get update -qq
           sudo apt-get install -y -qq python3-evdev
 

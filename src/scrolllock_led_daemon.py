@@ -2,7 +2,7 @@
 
 import argparse
 import configparser
-import importlib.spec
+import importlib.util
 import json
 import logging
 import os
@@ -333,7 +333,7 @@ def run_doctor() -> None:
 
     # Configuration file
     config_loaded = any(p.exists() for p in CONFIG_PATHS)
-    config_paths = "\n".join(f"    {p}" for p in CONTENTS_PATHS)
+    config_paths = "\n".join(f"    {p}" for p in CONFIG_PATHS)
     _check(
         "Configuration file",
         config_loaded,

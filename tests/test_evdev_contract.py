@@ -8,7 +8,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from scrolllock_led_daemon import (
-    find_scrolllock_keyboard,
+    find_keyboard,
     find_scrolllock_led,
     find_led_by_name,
     read_led,
@@ -18,22 +18,26 @@ from scrolllock_led_daemon import (
 
 def test_device_discovery_contract():
     """CONTRATO: Descoberta de dispositivo deve retornar teclado com Scroll Lock"""
-    with patch('evdev.list_devices') as mock_list:
+    with patch('scrolllock_led_daemon.list_devices') as mock_list, \
+         patch('scrolllock_led_daemon.InputDevice') as mock_input_device:
         # Teclado válido com Scroll Lock
         mock_kb = MagicMock()
         mock_kb.path = '/dev/input/event0'
         mock_kb.name = 'AT Translated Set 2 keyboard'
-        mock_kb.capabilities.return_value = {ecodes.EV_KEY: [ecodes.KEY_SCROLLLOCK, ecodes.KEY_A]}
+        mock_kb.capabilities.return_value = {
+            evdev.ecodes.EV_KEY: [evdev.ecodes.KEY_SCROLLLOCK]
+        }
 
         # Dispositivo inválido (sem Scroll Lock)
         mock_mouse = MagicMock()
         mock_mouse.path = '/dev/input/event1'
         mock_mouse.name = 'Mouse'
-        mock_mouse.capabilities.return_value = {ecodes.EV_KEY: [ecodes.BTN_LEFT, ecodes.BTN_RIGHT]}
+        mock_mouse.capabilities.return_value = {evdev.ecodes.EV_KEY: []}
 
-        mock_list.return_value = [mock_mouse, mock_kb]  # Mouse primeiro, teclado depois
+        mock_list.return_value = [mock_mouse.path, mock_kb.path]
+        mock_input_device.side_effect = [mock_mouse, mock_kb]
 
-        device = find_scrolllock_keyboard()
+        device = find_keyboard()
 
         assert device is not None
         assert device.path == '/dev/input/event0'
@@ -114,12 +118,12 @@ def test_systemd_notification_contract():
 
 def test_error_handling_contract():
     """CONTRATO: Erros de permissão devem ser tratados apropriadamente"""
-    with patch('evdev.InputDevice') as mock_device:
+    with patch('scrolllock_led_daemon.InputDevice') as mock_device:
         # Simula erro de permissão ao acessar dispositivo
         mock_device.side_effect = PermissionError("Access denied to /dev/input/event0")
 
         with pytest.raises(PermissionError, match="Access denied"):
-            find_scrolllock_keyboard("/dev/input/event0")
+            find_keyboard("/dev/input/event0")
 
 def test_daemon_state_logging():
     """CONTRATO: O daemon deve registrar eventos de estado importantes"""
