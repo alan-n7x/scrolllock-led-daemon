@@ -68,6 +68,11 @@ jobs:
           DEBFULLNAME: "Alan Santos"
         run: |
           rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo
+          VERSION=$(dpkg-parsechangelog -SVersion | sed 's/-.*//')
+          (cd .. && tar czf "scrolllock-led-daemon_${VERSION}.orig.tar.gz" \
+            --exclude-vcs --exclude='scrolllock-led-daemon/debian' \
+            --transform "s,^scrolllock-led-daemon,scrolllock-led-daemon-${VERSION}," \
+            scrolllock-led-daemon)
           debuild -S -sa -k89CF049935855E1E
           gpg --verify ../scrolllock-led-daemon_*_source.changes
 
