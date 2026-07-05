@@ -1,3 +1,10 @@
+## [1.4.9](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.8...v1.4.9) (2026-07-05)
+
+
+### Bug Fixes
+
+* atualiza ações do GitHub para versões mais recentes nos workflows ([abbbe81](https://github.com/alan-n7x/scrolllock-led-daemon/commit/abbbe81867c0053334431a1be026bc5c4136e33c))
+
 ## [1.4.8](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.7...v1.4.8) (2026-07-05)
 
 
