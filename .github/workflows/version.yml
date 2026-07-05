@@ -1,0 +1,46 @@
+name: Version Bump & Changelog
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Necessário para fazer push de volta
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install semantic-release
+        run: npm install -g semantic-release @semantic-release/changelog @semantic-release/exec @semantic-release/git
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version and generate changelog
+        id: semantic_release
+        run: |
+          # Executa semantic release (baseado em conventional commits)
+          npx semantic-release --no-ci
+
+          # Captura a nova versão para uso em outros jobs
+          NEW_VERSION=$(cat .version)
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Push changes (inclui nova tag e CHANGELOG)
+        if: steps.semantic_release.outputs.new_version != ''
+        run: |
+          git push origin main --tags
+          git push origin HEAD:refs/release/${{ steps.semantic_release.outputs.new_version }}

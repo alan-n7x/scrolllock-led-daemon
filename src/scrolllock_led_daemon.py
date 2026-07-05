@@ -2,8 +2,10 @@
 
 import argparse
 import configparser
-import importlib.util
+import importlib.spec
+import json
 import logging
+import os
 import signal
 import subprocess
 import sys
@@ -12,11 +14,37 @@ import time
 from ctypes import CDLL
 from pathlib import Path
 
+import sdnotify  # pip install sdnotify
+from pythonjsonlogger import jsonlogger  # pip install python-json-logger
 from evdev import InputDevice, ecodes, list_devices
 
 VERSION = "1.0.0"
 _shutdown = threading.Event()
-logger = logging.getLogger(__name__)
+
+# CONFIGURE STRUCTURED LOGGING
+def setup_logging():
+    """Configure structured JSON logging for production observability."""
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+
+    # Handler for stdout (captured by systemd)
+    handler = logging.StreamHandler(sys.stdout)
+
+    # JSON formatter with timestamp and standard fields
+    formatter = jsonlogger.JsonFormatter(
+        '%(timestamp)s %(level)s %(name)s %(message)s',
+        timestamp=True
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    # Reduce noise from external libraries
+    logging.getLogger('evdev').setLevel(logging.WARNING)
+    logging.getLogger('udev').setLevel(logging.WARNING)
+
+    return logger
+
+logger = setup_logging()
 
 CONFIG_PATHS = [
     Path("/etc/scrolllock-led-daemon.conf"),
@@ -31,7 +59,10 @@ def _handle_signal(signum: int, frame: object) -> None:
         signum: Signal number received.
         frame: Current stack frame (unused).
     """
-    logger.info("Received signal %d, shutting down...", signum)
+    logger.info("Received signal, shutting down...", extra={
+        "signal": signum,
+        "event": "shutdown_initiated"
+    })
     _shutdown.set()
 
 
@@ -54,7 +85,7 @@ def _notify_systemd(state: str = "READY=1") -> None:
     try:
         CDLL("libsystemd.so.0").sd_notify(0, state.encode())
     except OSError:
-        pass
+        pass  # systemd not available (e.g. when not running as service)
 
 
 def _resolve_key(key_name: str) -> int:
@@ -94,7 +125,15 @@ def run_daemon_loop(keyboard: InputDevice, led: Path, key_code: int) -> None:
             enabled = not read_led(led)
             write_led(led, enabled)
 
-            logger.info("Scroll Lock LED: %s", "on" if enabled else "off")
+            # Structured log for business event (LED state change)
+            logger.info("LED state changed", extra={
+                "event": "led_state_changed",
+                "device_path": keyboard.path,
+                "device_name": keyboard.name,
+                "led_type": "scrolllock",
+                "new_state": "on" if enabled else "off",
+                "timestamp": time.time()
+            })
 
 
 def find_keyboard(device_path: str | None = None) -> InputDevice:
@@ -114,7 +153,11 @@ def find_keyboard(device_path: str | None = None) -> InputDevice:
     """
     if device_path:
         device = InputDevice(device_path)
-        logger.info("Keyboard: %s (%s)", device.path, device.name)
+        logger.info("Keyboard configured", extra={
+            "event": "keyboard_configured",
+            "device_path": device.path,
+            "device_name": device.name
+        })
         return device
 
     for path in list_devices():
@@ -126,7 +169,11 @@ def find_keyboard(device_path: str | None = None) -> InputDevice:
         keys = device.capabilities().get(ecodes.EV_KEY, [])
 
         if ecodes.KEY_SCROLLLOCK in keys:
-            logger.debug("Keyboard found: %s (%s)", device.path, device.name)
+            logger.debug("Keyboard discovered", extra={
+                "event": "keyboard_discovered",
+                "device_path": device.path,
+                "device_name": device.name
+            })
             return device
 
     raise RuntimeError(
@@ -161,14 +208,20 @@ def find_scrolllock_led(led_path: str | None = None) -> Path:
         brightness = Path(led_path)
         if not brightness.exists():
             raise RuntimeError(f"LED brightness file not found: {brightness}")
-        logger.debug("Scroll Lock LED: %s", brightness)
+        logger.debug("LED configured", extra={
+            "event": "led_configured",
+            "led_path": str(brightness)
+        })
         return brightness
 
     for led in Path("/sys/class/leds").glob("*scrolllock"):
         brightness = led / "brightness"
 
         if brightness.exists():
-            logger.debug("Scroll Lock LED found: %s", brightness)
+            logger.debug("LED discovered", extra={
+                "event": "led_discovered",
+                "led_path": str(brightness)
+            })
             return brightness
 
     raise RuntimeError("No Scroll Lock LED found")
@@ -280,7 +333,7 @@ def run_doctor() -> None:
 
     # Configuration file
     config_loaded = any(p.exists() for p in CONFIG_PATHS)
-    config_paths = "\n".join(f"    {p}" for p in CONFIG_PATHS)
+    config_paths = "\n".join(f"    {p}" for p in CONTENTS_PATHS)
     _check(
         "Configuration file",
         config_loaded,
@@ -445,7 +498,10 @@ def load_config(config_path: str | None = None) -> dict:
 
     for path in paths:
         if path.exists():
-            logger.debug("Loading config: %s", path)
+            logger.debug("Loading config", extra={
+                "event": "config_loaded",
+                "config_path": str(path)
+            })
             config.read(path)
 
     result: dict = {}
@@ -539,7 +595,6 @@ def main() -> None:
     modes: daemon, one-shot (--set/--toggle), --list, or --doctor.
     """
     args = parse_args()
-
     config = load_config(args.config)
 
     verbose = args.verbose or config.get("verbose", False)
@@ -572,19 +627,47 @@ def main() -> None:
 
     if args.set:
         write_led(led, args.set == "on")
-        logger.info("Scroll Lock LED: %s", args.set)
+        logger.info("LED state set", extra={
+            "event": "led_set",
+            "state": args.set
+        })
         return
 
     if args.toggle:
         enabled = not read_led(led)
         write_led(led, enabled)
-        logger.info("Scroll Lock LED: %s", "on" if enabled else "off")
+        logger.info("LED state toggled", extra={
+            "event": "led_toggled",
+            "new_state": "on" if enabled else "off"
+        })
         return
 
     _setup_signal_handlers()
 
+    # Initialize systemd watchdog notification
+    notifier = sdnotify.SystemdNotifier()
+    last_notify = time.time()
+
     _notify_systemd("READY=1")
-    logger.info("Daemon started")
+    logger.info("Daemon started", extra={
+        "event": "daemon_started",
+        "version": VERSION,
+        "pid": os.getpid(),
+        "host": os.uname().nodename
+    })
+
+    watchdog_enabled = False
+    watchdog_usec = 0
+    try:
+        # Check if watchdog is enabled by systemd
+        watchdog_usec = int(os.environ.get("WATCHDOG_USEC", "0"))
+        watchdog_enabled = watchdog_usec > 0
+        if watchdog_enabled:
+            logger.info("Systemd watchdog enabled", extra={
+                "watchdog_usec": watchdog_usec
+            })
+    except (ValueError, TypeError):
+        pass
 
     while not _shutdown.is_set():
         try:
@@ -593,11 +676,34 @@ def main() -> None:
         except (OSError, RuntimeError) as e:
             if _shutdown.is_set():
                 break
-            logger.error("Connection lost: %s. Reconnecting in 2 seconds...", e)
+            logger.error("Connection lost, reconnecting...", extra={
+                "event": "connection_lost",
+                "error": str(e),
+                "retry_in_seconds": 2
+            })
             time.sleep(2)
 
+        # Systemd watchdog heartbeat (notify every 1/3 of watchdog interval)
+        if watchdog_enabled and watchdog_usec > 0:
+            now = time.time()
+            if now - last_notify > (watchdog_usec / 1000000) / 3:
+                try:
+                    notifier.notify("WATCHDOG=1")
+                    last_notify = now
+                    logger.debug("Watchdog notified", extra={
+                        "event": "watchdog_notify"
+                    })
+                except Exception as e:
+                    logger.warning("Failed to notify watchdog", extra={
+                        "event": "watchdog_error",
+                        "error": str(e)
+                    })
+
     _notify_systemd("STOPPING=1")
-    logger.info("Daemon stopped")
+    logger.info("Daemon stopped", extra={
+        "event": "daemon_stopped",
+        "exit_reason": "normal_shutdown" if _shutdown.is_set() else "error"
+    })
 
 
 if __name__ == "__main__":

@@ -28,7 +28,9 @@ classifiers = [
 ]
 
 dependencies = [
-    "evdev>=1.9.2"
+    "evdev>=1.9.2",
+    "python-json-logger>=2.0.0",
+    "sdnotify>=0.3.3"
 ]
 
 [project.optional-dependencies]

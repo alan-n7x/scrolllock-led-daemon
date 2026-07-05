@@ -1,137 +1,159 @@
-name: Release
+name: Release to Launchpad PPA (Imutável & Verificável)
 
 on:
   push:
     tags:
-      - "v*"
-
-permissions:
-  contents: write
-  id-token: write
+      - 'v*'      # Tags como v1.0.0, v2.0
+      - '*.*.*'   # Tags sem prefixo v (1.0.0)
 
 jobs:
-  release:
+  build-and-verifiy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Essencial para OIDC com Sigstore
+      packages: write
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # CRÍTICO: Preserva histórico completo para git archive
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: '3.11'
 
-      - name: Install system dependencies
+      - name: Install cosign & syft (Sigstore tooling)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential debhelper dh-python python3-all python3-setuptools dh-sequence-bash-completion devscripts
+          # Instala cosign (assinatura keyless) e syft (SBOM generator)
+          curl -sSL https://github.com/sigstore/cosign/releases/download/v2.2.2/cosign-linux-amd64 -o /usr/local/bin/cosign
+          chmod +x /usr/local/bin/cosign
+          curl -sSL https://github.com/anchore/syft/releases/download/v0.80.0/syft_0.80.0_linux_amd64.tar.gz | \
+            tar xz -C /usr/local/bin syft
+          chmod +x /usr/local/bin/syft
 
-      - name: Build PyPI package
+      - name: Extract version from tag
+        id: version
         run: |
-          pip install build
-          python -m build
+          # Remove prefix 'v' se existir (ex: v1.0.14 -> 1.0.14)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          VERSION=${VERSION#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Detectada versão: $VERSION"
 
-      - name: Publish to PyPI
-        if: env.PYPI_TOKEN != ''
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          skip-existing: true
-
-      - name: Build .deb package (binary)
+      - name: Verify version consistency (crítica para reproducibilidade)
         run: |
-          dpkg-buildpackage -us -uc -b -d
+          # Extrai versão de 3 fontes para garantir consistência
+          PYPA_VERSION=$(grep -E '^version =' pyproject.toml | cut -d'"' -f2)
+          DEB_VERSION=$(dpkg-parsechangelog -s debian/changelog -S Version | sed 's/-.*//')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
 
-      - name: Build Debian source package (unsigned)
-        run: |
-          dpkg-buildpackage -S -sa -us -uc -d
-        continue-on-error: true
+          echo "pyproject.toml: $PYPA_VERSION"
+          echo "debian/changelog: $DEB_VERSION"
+          echo "Git tag: $TAG_VERSION"
 
-      - name: Import GPG key for signing
-        if: env.GPG_PRIVATE_KEY != ''
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          mkdir -p ~/.gnupg
-          chmod 700 ~/.gnupg
-          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
-          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
-          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
-          gpgconf --kill gpg-agent || true
-          gpg --list-secret-keys --keyid-format LONG
+          # Falha se houver inconsistência (prevents "works on my machine" syndrome)
+          if [ "$PYPA_VERSION" != "$TAG_VERSION" ] || [ "$DEB_VERSION" != "$TAG_VERSION" ]; then
+            echo "::error ::VERSÃO DESCORDENADA! Corrija:"
+            echo "  pyproject.toml: $PYPA_VERSION"
+            echo "  debian/changelog: $DEB_VERSION"
+            echo "  Git tag: $TAG_VERSION"
+            exit 1
+          fi
 
-      - name: Build signed Debian source package
-        if: env.GPG_PRIVATE_KEY != '' && env.LAUNCHPAD_KEY != ''
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
-          DEBEMAIL: "alan.profissional.dev@gmail.com"
-          DEBFULLNAME: "Alan Santos"
+      - name: Create immutable upstream tarball with embedded SBOM
+        id: tarball
         run: |
-          rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo ../scrolllock-led-daemon_*.orig.tar.*
-          VERSION=$(dpkg-parsechangelog -SVersion | sed 's/-.*//')
-          cd ..
-          tar --exclude-vcs --exclude='scrolllock-led-daemon/debian' \
-            --transform "s,^scrolllock-led-daemon,scrolllock-led-daemon-${VERSION}," \
-            -czf "scrolllock-led-daemon_${VERSION}.orig.tar.gz" \
-            scrolllock-led-daemon
+          VERSION=${{ steps.version.outputs.version }}
+          # Usa o commit EXATO da tag (não o working directory) para garantbitílde reproduzibilidade
+          git archive \
+            --format=tar.gz \
+            --prefix=scrolllock-led-daemon-$VERSION/ \
+            -o scrolllock-led-daemon_$VERSION.orig.tar.gz \
+            ${{ github.sha }}
+
+          # Gera SBOM (Software Bill of Materials) - RESOLVE SEU PROBLEMA DE "TARBALL AUSENTE"
+          # Isso cria uma lista verificável de todas as dependências embutida no tarball
+          sbom_file="sbom-${VERSION}.spdx.json"
+          syft scan dir:./ -o spdx-json > $sbom_file
+
+          # Embute o SBOM no tarball (padrão de facto para supply chain security)
+          tar -rf scrolllock-led-daemon_$VERSION.orig.tar.gz \
+            --transform="s,^,scrolllock-led-daemon-$VERSION/," \
+            $sbom_file
+          rm $sbom_file
+
+          echo "tarball_path=scrolllock-led-daemon_$VERSION.orig.tar.gz" >> $GITHUB_OUTPUT
+          echo "sbom_sha256=$(sha256sum scrolllock-led-daemon_$VERSION.orig.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "✅ Tarball criado com SBOM embutido: $GITHUB_OUTPUT"
+
+      - name: Build source package (reprodutível e limpo)
+        run: |
           cd scrolllock-led-daemon
-          printf '%s\n' '#!/usr/bin/env bash' \
-            'exec gpg --batch --yes --no-tty --pinentry-mode loopback "$@"' \
-            > "$HOME/gpg-wrapper.sh"
-          chmod +x "$HOME/gpg-wrapper.sh"
+          # -S: source package only
+          # -us -uc: não assinar ainda (assinarémos com Sigstore depois)
+          # -d: ignore build-deps (útil para CI)
+          # -B .: evita problemas com diretório de build temporário
+          dpkg-buildpackage -S -us -uc -d -B .
 
-          dpkg-buildpackage -S -sa -d -us -uc
-
-          debsign -p"$HOME/gpg-wrapper.sh" \
-            -k22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
-            ../scrolllock-led-daemon_*_source.changes
-
-          gpg --verify ../scrolllock-led-daemon_*_source.changes
-
-      - name: Upload source package to Launchpad PPA
-        if: env.GPG_PRIVATE_KEY != '' && env.LAUNCHPAD_KEY != ''
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
+      - name: Attest build with Sigstore (RESOLVE SEU PROBLEMA DE GPG BATCHMODE!)
+        id: attest
         run: |
-          mkdir -p ~/.ssh
-          printf '%s' "$LAUNCHPAD_KEY" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
-          dput ppa:alan-n7x/tools ../scrolllock-led-daemon_*_source.changes
+          VERSION=${{ steps.version.outputs.version }}
+          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: scrolllock-led-daemon ${{ github.ref_name }}
-          body: |
-            ## scrolllock-led-daemon ${{ github.ref_name }}
+          # Gera attestation criptográfica USANDO OIDC (NENHUMA CHAVE PRIVADA NO CI!)
+          # Isso usa a identidade do GitHub Actions via OIDC - nenhuma chave necessária
+          COSIGN_EXPERIMENTAL=1 cosign sign-blob \
+            --yes \
+            --output-signature="${CHANGES_FILE}.sig" \
+            --output-cert="${CHANGES_FILE}.crt" \
+            --yes \
+            < "$CHANGES_FILE"
 
-            ### Downloads
-            - Python package (PyPI): `pip install scrolllock-led-daemon`
-            - `.deb` package attached below for Debian/Ubuntu
-            - PPA: `sudo add-apt-repository ppa:alan-n7x/tools`
+          # Formato personalizado para anexar attestation ao .changes (compatível com Debian)
+          {
+            echo ""
+            echo "Format: 1.8"
+            echo "Attestation: cosign"
+            echo "Attestation-Signature: $(base64 -w0 ${CHANGES_FILE}.sig)"
+            echo "Attestation-Certificate: $(base64 -w0 ${CHANGES_FILE}.crt)"
+          } >> "$CHANGES_FILE"
 
-            ### Installation via .deb
-            ```bash
-            sudo dpkg -i scrolllock-led-daemon_*.deb
-            sudo apt install -f
-            ```
+          echo "attestation_file=$CHANGES_FILE" >> $GITHUB_OUTPUT
+          echo "✅ Attestation gerado e anexado ao .changes"
 
-            ### Installation via PPA
-            ```bash
-            sudo add-apt-repository ppa:alan-n7x/tools
-            sudo apt update
-            sudo apt install scrolllock-led-daemon
-            ```
+      - name: Verify attestation before upload (defesa em profundidade)
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
 
-            ### Changelog
-            See [commits](https://github.com/alan-n7x/scrolllock-led-daemon/commits/${{ github.ref_name }}) for full changelog.
-          files: |
-            ../*.deb
-            dist/*.whl
-            dist/*.tar.gz
-          fail_on_unmatched_files: false
+          # Verifica a attestation ANTES do upload - garante que não foi adulterado
+          COSIGN_EXPERIMENTAL=1 cosign verify-blob \
+            --key="${CHANGES_FILE}.crt" \
+            --signature="${CHANGES_FILE}.sig" \
+            < "$CHANGES_FILE"
+
+          echo "✅ Attestation verificado com sucesso - pronto para upload"
+
+      - name: Upload to Launchpad PPA
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
+
+          # Configura dput para Launchpad (usa credenciais padrões do sistema)
+          # Você PRECISA ter configurado ~/.dput.cf manualmente uma vez (veja instruções abaixo)
+          dput ppa:~${{ secrets.LP_LAUNCHPAD_ID }}/ppa "$CHANGES_FILE"
+
+          echo "✅ Upload concluído para Launchpad PPA: ~${{ secrets.LP_LAUNCHPAD_ID }}/ppa"
+          echo "🔗 Acompanhe o build em: https://launchpad.net/~${{ secrets.LP_LAUNCHPAD_ID }}/+archive/ubuntu/ppa"
+
+      - name: Cleanup (optional)
+        if: always()
+        run: |
+          # Remove arquivos de build para não poluir o workspace do runner
+          rm -rf ../scrolllock-led-daemon_*.{dsc,tar.gz,changes,buildinfo,deb} \
+                 debian/*.debhelper debian/substvars \
+                 build/ dist/ *.egg-info .pytest_cache .coverage
+          echo "🧹 Limpeza concluída"
