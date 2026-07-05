@@ -1,3 +1,10 @@
+## [1.4.3](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.2...v1.4.3) (2026-07-05)
+
+
+### Bug Fixes
+
+* permite assinatura GPG com passphrase vazia ([ff9591e](https://github.com/alan-n7x/scrolllock-led-daemon/commit/ff9591e2eeb31d34305e0c8bad2548fe432b5243))
+
 ## [1.4.2](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.1...v1.4.2) (2026-07-05)
 
 
