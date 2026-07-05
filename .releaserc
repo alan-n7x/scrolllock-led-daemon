@@ -28,6 +28,22 @@
         "linkCompare": false,
         "linkIssues": false
       }
+    }],
+    ["@semantic-release/changelog", {
+      "changelogFile": "CHANGELOG.md"
+    }],
+    ["@semantic-release/exec", {
+      "prepareCmd": "python scripts/prepare_release.py ${nextRelease.version}",
+      "successCmd": "echo 'new_version=${nextRelease.version}' >> \"$GITHUB_OUTPUT\""
+    }],
+    ["@semantic-release/git", {
+      "assets": [
+        "CHANGELOG.md",
+        "pyproject.toml",
+        "src/scrolllock_led_daemon.py",
+        "debian/changelog"
+      ],
+      "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
     }]
   ]
 }
