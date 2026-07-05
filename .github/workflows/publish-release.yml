@@ -1,0 +1,228 @@
+name: Publish Coordinated Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+      - '*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag (for example: v1.5.2)'
+        required: true
+        type: string
+      publish_pypi:
+        description: 'Publish the Python distributions to PyPI'
+        required: true
+        default: true
+        type: boolean
+      publish_launchpad:
+        description: 'Publish the Debian source package to Launchpad'
+        required: true
+        default: true
+        type: boolean
+      publish_github_release:
+        description: 'Create the GitHub Release and attach signed assets'
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: coordinated-release
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  publish:
+    name: Coordinate release publication
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Resolve and validate release tag
+        id: release
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+          else
+            TAG="$INPUT_TAG"
+          fi
+
+          if ! [[ "$TAG" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Invalid stable semantic-version tag: $TAG"
+            exit 1
+          fi
+
+          TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')
+          OBJECT_TYPE=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.type')
+          if [ "$OBJECT_TYPE" = "tag" ]; then
+            TAG_SHA=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_SHA" --jq '.object.sha')
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "sha=$TAG_SHA" >> "$GITHUB_OUTPUT"
+          echo "Coordinating publication for $TAG at $TAG_SHA"
+
+      - name: Check out immutable release tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          persist-credentials: false
+
+      - name: Verify version consistency
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          PYPROJECT_VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' pyproject.toml)
+          RUNTIME_VERSION=$(sed -n 's/^VERSION = "\([^"]*\)"/\1/p' src/scrolllock_led_daemon.py)
+          DEBIAN_VERSION=$(dpkg-parsechangelog -l debian/changelog -S Version | sed 's/-[^-]*$//')
+
+          if [ "$PYPROJECT_VERSION" != "$RELEASE_VERSION" ] || \
+             [ "$RUNTIME_VERSION" != "$RELEASE_VERSION" ] || \
+             [ "$DEBIAN_VERSION" != "$RELEASE_VERSION" ]; then
+            echo '::error::Release versions are inconsistent with the tag.'
+            printf 'Tag: %s\npyproject: %s\nruntime: %s\ndebian: %s\n' \
+              "$RELEASE_VERSION" "$PYPROJECT_VERSION" "$RUNTIME_VERSION" "$DEBIAN_VERSION"
+            exit 1
+          fi
+
+      - name: Dispatch and monitor publication workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG_SHA: ${{ steps.release.outputs.sha }}
+          INPUT_PYPI: ${{ inputs.publish_pypi }}
+          INPUT_LAUNCHPAD: ${{ inputs.publish_launchpad }}
+          INPUT_GITHUB_RELEASE: ${{ inputs.publish_github_release }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            PUBLISH_PYPI=true
+            PUBLISH_LAUNCHPAD=true
+            PUBLISH_GITHUB_RELEASE=true
+          else
+            PUBLISH_PYPI="$INPUT_PYPI"
+            PUBLISH_LAUNCHPAD="$INPUT_LAUNCHPAD"
+            PUBLISH_GITHUB_RELEASE="$INPUT_GITHUB_RELEASE"
+          fi
+
+          declare -a WORKFLOWS=()
+          declare -A LABELS=()
+
+          dispatch() {
+            local workflow=$1
+            local label=$2
+            shift 2
+            gh workflow run "$workflow" "$@"
+            WORKFLOWS+=("$workflow")
+            LABELS["$workflow"]="$label"
+            echo "Dispatched $label for $TAG"
+          }
+
+          monitor_phase() {
+            local dispatched_at=$1
+            declare -A run_ids=()
+
+            if [ "${#WORKFLOWS[@]}" -eq 0 ]; then
+              return
+            fi
+
+            for attempt in {1..30}; do
+              for workflow in "${WORKFLOWS[@]}"; do
+                if [ -n "${run_ids[$workflow]:-}" ]; then
+                  continue
+                fi
+
+                RUN_ID=$(gh api --method GET \
+                  "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs" \
+                  -f event=workflow_dispatch -f per_page=20 \
+                  --jq ".workflow_runs[] | select(.head_sha == \"$TAG_SHA\" and .created_at >= \"$dispatched_at\") | .id" \
+                  | head -n 1)
+                if [ -n "$RUN_ID" ]; then
+                  run_ids["$workflow"]="$RUN_ID"
+                  echo "Found ${LABELS[$workflow]} run: $RUN_ID"
+                fi
+              done
+
+              if [ "${#run_ids[@]}" -eq "${#WORKFLOWS[@]}" ]; then
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "${#run_ids[@]}" -ne "${#WORKFLOWS[@]}" ]; then
+              echo '::error::Timed out while locating one or more publication runs.'
+              exit 1
+            fi
+
+            while :; do
+              ALL_COMPLETE=true
+              FAILED=false
+
+              for workflow in "${WORKFLOWS[@]}"; do
+                RUN_ID=${run_ids[$workflow]}
+                STATUS=$(gh run view "$RUN_ID" --json status --jq '.status')
+                CONCLUSION=$(gh run view "$RUN_ID" --json conclusion --jq '.conclusion')
+                echo "${LABELS[$workflow]}: status=$STATUS conclusion=${CONCLUSION:-pending}"
+
+                if [ "$STATUS" != "completed" ]; then
+                  ALL_COMPLETE=false
+                elif [ "$CONCLUSION" != "success" ]; then
+                  FAILED=true
+                fi
+              done
+
+              if [ "$ALL_COMPLETE" = true ]; then
+                if [ "$FAILED" = true ]; then
+                  echo '::error::One or more publication workflows failed.'
+                  exit 1
+                fi
+                break
+              fi
+              sleep 15
+            done
+          }
+
+          if [ "$PUBLISH_PYPI" != "true" ] && \
+             [ "$PUBLISH_LAUNCHPAD" != "true" ] && \
+             [ "$PUBLISH_GITHUB_RELEASE" != "true" ]; then
+            echo '::error::At least one publication channel must be selected.'
+            exit 1
+          fi
+
+          # Publish package registries first. The public GitHub Release is only
+          # created after every selected registry workflow succeeds.
+          DISPATCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          if [ "$PUBLISH_PYPI" = "true" ]; then
+            dispatch pypi.yml PyPI --ref "$TAG" -f version="$VERSION"
+          fi
+          if [ "$PUBLISH_LAUNCHPAD" = "true" ]; then
+            dispatch release.yml Launchpad --ref "$TAG"
+          fi
+          monitor_phase "$DISPATCHED_AT"
+
+          WORKFLOWS=()
+          LABELS=()
+          if [ "$PUBLISH_GITHUB_RELEASE" = "true" ]; then
+            DISPATCHED_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            dispatch github-release-assets.yml GitHub-Release \
+              --ref "$TAG" -f tag="$TAG"
+            monitor_phase "$DISPATCHED_AT"
+          fi
+
+          echo "All selected publication channels completed successfully for $TAG."

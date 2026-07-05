@@ -55,5 +55,5 @@ jobs:
           NEW_VERSION: ${{ steps.semantic_release.outputs.new_version }}
         run: |
           TAG="v${NEW_VERSION}"
-          gh workflow run release.yml --ref "$TAG"
-          echo "Dispatched Launchpad release workflow for $TAG"
+          gh workflow run publish-release.yml --ref "$TAG" -f tag="$TAG"
+          echo "Dispatched coordinated release workflow for $TAG"
