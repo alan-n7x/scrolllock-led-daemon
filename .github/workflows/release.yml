@@ -135,6 +135,18 @@ jobs:
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           chmod +x scripts/gpg-ci-wrapper.sh
+
+          SIGN_TEST="$RUNNER_TEMP/gpg-sign-test"
+          printf '%s\n' 'Launchpad signing test' > "$SIGN_TEST"
+          if ! scripts/gpg-ci-wrapper.sh \
+            --local-user "${{ steps.gpg.outputs.fingerprint }}" \
+            --detach-sign \
+            --output "${SIGN_TEST}.sig" \
+            "$SIGN_TEST"; then
+            echo "::error::The imported GPG key could not sign non-interactively. If the key is protected, configure the GPG_PASSPHRASE secret."
+            exit 1
+          fi
+
           dpkg-buildpackage \
             -S \
             -d \
