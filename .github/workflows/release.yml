@@ -24,14 +24,31 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install Debian packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            bash-completion \
+            debhelper \
+            devscripts \
+            dh-python \
+            dh-sequence-bash-completion \
+            dput \
+            python3-all \
+            python3-setuptools
+
       - name: Install cosign & syft (Sigstore tooling)
         run: |
-          # Instala cosign (assinatura keyless) e syft (SBOM generator)
-          curl -sSL https://github.com/sigstore/cosign/releases/download/v2.2.2/cosign-linux-amd64 -o /usr/local/bin/cosign
-          chmod +x /usr/local/bin/cosign
-          curl -sSL https://github.com/anchore/syft/releases/download/v0.80.0/syft_0.80.0_linux_amd64.tar.gz | \
-            tar xz -C /usr/local/bin syft
-          chmod +x /usr/local/bin/syft
+          curl -fsSL \
+            https://github.com/sigstore/cosign/releases/download/v2.2.2/cosign-linux-amd64 \
+            -o "$RUNNER_TEMP/cosign"
+          sudo install -m 0755 "$RUNNER_TEMP/cosign" /usr/local/bin/cosign
+
+          curl -fsSL \
+            https://github.com/anchore/syft/releases/download/v0.80.0/syft_0.80.0_linux_amd64.tar.gz \
+            -o "$RUNNER_TEMP/syft.tar.gz"
+          tar xzf "$RUNNER_TEMP/syft.tar.gz" -C "$RUNNER_TEMP" syft
+          sudo install -m 0755 "$RUNNER_TEMP/syft" /usr/local/bin/syft
 
       - name: Extract version from tag
         id: version
@@ -62,92 +79,127 @@ jobs:
             exit 1
           fi
 
-      - name: Create immutable upstream tarball with embedded SBOM
+      - name: Create immutable upstream tarball and separate SBOM
         id: tarball
         run: |
           VERSION=${{ steps.version.outputs.version }}
-          # Usa o commit EXATO da tag (não o working directory) para garantbitílde reproduzibilidade
+          TARBALL="../scrolllock-led-daemon_${VERSION}.orig.tar.gz"
+          SBOM="../scrolllock-led-daemon_${VERSION}.sbom.spdx.json"
+
+          # dpkg-source expects the upstream tarball in the parent directory.
           git archive \
             --format=tar.gz \
             --prefix=scrolllock-led-daemon-$VERSION/ \
-            -o scrolllock-led-daemon_$VERSION.orig.tar.gz \
+            -o "$TARBALL" \
             ${{ github.sha }}
 
-          # Gera SBOM (Software Bill of Materials) - RESOLVE SEU PROBLEMA DE "TARBALL AUSENTE"
-          # Isso cria uma lista verificável de todas as dependências embutida no tarball
-          sbom_file="sbom-${VERSION}.spdx.json"
-          syft scan dir:./ -o spdx-json > $sbom_file
+          # The SBOM remains separate so it cannot invalidate Debian signatures.
+          syft scan dir:. -o spdx-json > "$SBOM"
 
-          # Embute o SBOM no tarball (padrão de facto para supply chain security)
-          tar -rf scrolllock-led-daemon_$VERSION.orig.tar.gz \
-            --transform="s,^,scrolllock-led-daemon-$VERSION/," \
-            $sbom_file
-          rm $sbom_file
+          echo "tarball_path=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "sbom_path=$SBOM" >> "$GITHUB_OUTPUT"
+          echo "tarball_sha256=$(sha256sum "$TARBALL" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
-          echo "tarball_path=scrolllock-led-daemon_$VERSION.orig.tar.gz" >> $GITHUB_OUTPUT
-          echo "sbom_sha256=$(sha256sum scrolllock-led-daemon_$VERSION.orig.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
-          echo "✅ Tarball criado com SBOM embutido: $GITHUB_OUTPUT"
-
-      - name: Build source package (reprodutível e limpo)
+      - name: Import Launchpad GPG signing key
+        id: gpg
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
         run: |
-          cd scrolllock-led-daemon
-          # -S: source package only
-          # -us -uc: não assinar ainda (assinarémos com Sigstore depois)
-          # -d: ignore build-deps (útil para CI)
-          # -B .: evita problemas com diretório de build temporário
-          dpkg-buildpackage -S -us -uc -d -B .
+          if [ -z "$GPG_PRIVATE_KEY" ]; then
+            echo "::error::The GPG_PRIVATE_KEY repository secret is not configured."
+            exit 1
+          fi
 
-      - name: Attest build with Sigstore (RESOLVE SEU PROBLEMA DE GPG BATCHMODE!)
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          KEY_FINGERPRINT=$(gpg --batch --with-colons --list-secret-keys \
+            | awk -F: '$1 == "fpr" { print $10; exit }')
+
+          if [ -z "$KEY_FINGERPRINT" ]; then
+            echo "::error::No secret GPG key was imported."
+            exit 1
+          fi
+
+          echo "fingerprint=$KEY_FINGERPRINT" >> "$GITHUB_OUTPUT"
+          echo "Imported GPG signing key: $KEY_FINGERPRINT"
+
+      - name: Build and GPG-sign source package
+        id: build
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          chmod +x scripts/gpg-ci-wrapper.sh
+          dpkg-buildpackage \
+            -S \
+            -d \
+            -sa \
+            --sign-backend=gpg \
+            -k"${{ steps.gpg.outputs.fingerprint }}" \
+            -p"$GITHUB_WORKSPACE/scripts/gpg-ci-wrapper.sh"
+
+          mapfile -t changes_files < <(
+            find .. -maxdepth 1 -type f \
+              -name 'scrolllock-led-daemon_*_source.changes' -print
+          )
+          if [ "${#changes_files[@]}" -ne 1 ]; then
+            echo "::error::Expected one signed source .changes file, found ${#changes_files[@]}."
+            exit 1
+          fi
+
+          CHANGES_FILE=$(realpath "${changes_files[0]}")
+          gpg --batch --verify "$CHANGES_FILE"
+          echo "changes_file=$CHANGES_FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Attest signed source upload with Sigstore
         id: attest
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
+          CHANGES_FILE="${{ steps.build.outputs.changes_file }}"
 
-          # Gera attestation criptográfica USANDO OIDC (NENHUMA CHAVE PRIVADA NO CI!)
-          # Isso usa a identidade do GitHub Actions via OIDC - nenhuma chave necessária
           COSIGN_EXPERIMENTAL=1 cosign sign-blob \
             --yes \
             --output-signature="${CHANGES_FILE}.sig" \
-            --output-cert="${CHANGES_FILE}.crt" \
-            --yes \
-            < "$CHANGES_FILE"
-
-          # Formato personalizado para anexar attestation ao .changes (compatível com Debian)
-          {
-            echo ""
-            echo "Format: 1.8"
-            echo "Attestation: cosign"
-            echo "Attestation-Signature: $(base64 -w0 ${CHANGES_FILE}.sig)"
-            echo "Attestation-Certificate: $(base64 -w0 ${CHANGES_FILE}.crt)"
-          } >> "$CHANGES_FILE"
+            --output-certificate="${CHANGES_FILE}.crt" \
+            "$CHANGES_FILE"
 
           echo "attestation_file=$CHANGES_FILE" >> $GITHUB_OUTPUT
-          echo "✅ Attestation gerado e anexado ao .changes"
+          echo "✅ Sigstore attestation generated separately from the Debian upload"
 
       - name: Verify attestation before upload (defesa em profundidade)
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
+          CHANGES_FILE="${{ steps.build.outputs.changes_file }}"
 
-          # Verifica a attestation ANTES do upload - garante que não foi adulterado
           COSIGN_EXPERIMENTAL=1 cosign verify-blob \
-            --key="${CHANGES_FILE}.crt" \
+            --certificate="${CHANGES_FILE}.crt" \
             --signature="${CHANGES_FILE}.sig" \
-            < "$CHANGES_FILE"
+            --certificate-identity-regexp='^https://github.com/alan-n7x/scrolllock-led-daemon/.github/workflows/release.yml@refs/tags/.+$' \
+            --certificate-oidc-issuer='https://token.actions.githubusercontent.com' \
+            "$CHANGES_FILE"
 
           echo "✅ Attestation verificado com sucesso - pronto para upload"
 
       - name: Upload to Launchpad PPA
+        env:
+          LP_LAUNCHPAD_ID: ${{ secrets.LP_LAUNCHPAD_ID }}
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          CHANGES_FILE="../scrolllock-led-daemon_${VERSION}.source.changes"
+          CHANGES_FILE="${{ steps.build.outputs.changes_file }}"
 
-          # Configura dput para Launchpad (usa credenciais padrões do sistema)
-          # Você PRECISA ter configurado ~/.dput.cf manualmente uma vez (veja instruções abaixo)
-          dput ppa:~${{ secrets.LP_LAUNCHPAD_ID }}/tools "$CHANGES_FILE"
+          if [ -z "$LP_LAUNCHPAD_ID" ]; then
+            echo "::error::The LP_LAUNCHPAD_ID repository secret is not configured."
+            exit 1
+          fi
 
-          echo "✅ Upload concluído para Launchpad PPA: ~${{ secrets.LP_LAUNCHPAD_ID }}/tools"
-          echo "🔗 Acompanhe o build em: https://launchpad.net/~${{ secrets.LP_LAUNCHPAD_ID }}/+archive/ubuntu/tools"
+          dput "ppa:~${LP_LAUNCHPAD_ID}/tools" "$CHANGES_FILE"
+
+          echo "✅ Upload concluído para Launchpad PPA: ~${LP_LAUNCHPAD_ID}/tools"
+          echo "🔗 Acompanhe o build em: https://launchpad.net/~${LP_LAUNCHPAD_ID}/+archive/ubuntu/tools"
+
+      - name: Upload source, SBOM, and attestations as workflow artifacts
+        if: always() && steps.build.outputs.changes_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-source-${{ steps.version.outputs.version }}
+          path: |
+            ../scrolllock-led-daemon_${{ steps.version.outputs.version }}*
+          if-no-files-found: error
 
       - name: Cleanup (optional)
         if: always()
