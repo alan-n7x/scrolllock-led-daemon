@@ -18,7 +18,7 @@ import sdnotify  # pip install sdnotify
 from pythonjsonlogger import jsonlogger  # pip install python-json-logger
 from evdev import InputDevice, ecodes, list_devices
 
-VERSION = "1.4.5"
+VERSION = "1.4.6"
 _shutdown = threading.Event()
 
 # CONFIGURE STRUCTURED LOGGING
