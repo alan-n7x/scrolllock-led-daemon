@@ -211,13 +211,20 @@ jobs:
           echo "✅ Upload concluído para Launchpad PPA: ~${LP_LAUNCHPAD_ID}/tools"
           echo "🔗 Acompanhe o build em: https://launchpad.net/~${LP_LAUNCHPAD_ID}/+archive/ubuntu/tools"
 
+      - name: Collect release artifacts
+        if: always() && steps.build.outputs.changes_file != ''
+        run: |
+          mkdir -p release-artifacts
+          find .. -maxdepth 1 -type f \
+            -name 'scrolllock-led-daemon_${{ steps.version.outputs.version }}*' \
+            -exec cp --target-directory=release-artifacts {} +
+
       - name: Upload source, SBOM, and attestations as workflow artifacts
         if: always() && steps.build.outputs.changes_file != ''
         uses: actions/upload-artifact@v4
         with:
           name: launchpad-source-${{ steps.version.outputs.version }}
-          path: |
-            ../scrolllock-led-daemon_${{ steps.version.outputs.version }}*
+          path: release-artifacts/
           if-no-files-found: error
 
       - name: Cleanup (optional)
@@ -226,5 +233,5 @@ jobs:
           # Remove arquivos de build para não poluir o workspace do runner
           rm -rf ../scrolllock-led-daemon_*.{dsc,tar.gz,changes,buildinfo,deb} \
                  debian/*.debhelper debian/substvars \
-                 build/ dist/ *.egg-info .pytest_cache .coverage
+                 build/ dist/ release-artifacts/ *.egg-info .pytest_cache .coverage
           echo "🧹 Limpeza concluída"
