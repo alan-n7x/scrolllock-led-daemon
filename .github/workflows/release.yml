@@ -49,41 +49,53 @@ jobs:
         continue-on-error: true
 
       - name: Import GPG key for signing
-        if: env.GPG_KEY != ''
+        if: env.GPG_PRIVATE_KEY != ''
         env:
-          GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-        continue-on-error: true
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
           mkdir -p ~/.gnupg
-          echo "allow-loopback-pinentry" > ~/.gnupg/gpg-agent.conf
-          gpgconf --kill gpg-agent
-          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
-          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --batch --yes --passphrase-fd 0 --pinentry-mode loopback --sign /dev/null 2>/dev/null || true
+          chmod 700 ~/.gnupg
+          printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+          echo "allow-loopback-pinentry" >> ~/.gnupg/gpg-agent.conf
+          echo "pinentry-mode loopback" >> ~/.gnupg/gpg.conf
+          gpgconf --kill gpg-agent || true
+          gpg --list-secret-keys --keyid-format LONG
 
       - name: Build signed Debian source package
-        if: env.GPG_KEY != '' && env.LAUNCHPAD_KEY != ''
+        if: env.GPG_PRIVATE_KEY != '' && env.LAUNCHPAD_KEY != ''
         env:
-          GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
           DEBEMAIL: "alan.profissional.dev@gmail.com"
           DEBFULLNAME: "Alan Santos"
         run: |
-          rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo
+          rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo ../scrolllock-led-daemon_*.orig.tar.*
           VERSION=$(dpkg-parsechangelog -SVersion | sed 's/-.*//')
-          (cd .. && tar czf "scrolllock-led-daemon_${VERSION}.orig.tar.gz" \
-            --exclude-vcs --exclude='scrolllock-led-daemon/debian' \
+          cd ..
+          tar --exclude-vcs --exclude='scrolllock-led-daemon/debian' \
             --transform "s,^scrolllock-led-daemon,scrolllock-led-daemon-${VERSION}," \
-            scrolllock-led-daemon)
-          debuild -S -sa -k89CF049935855E1E
+            -czf "scrolllock-led-daemon_${VERSION}.orig.tar.gz" \
+            scrolllock-led-daemon
+          cd scrolllock-led-daemon
+          printf '%s\n' '#!/usr/bin/env bash' \
+            'exec gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" "$@"' \
+            > "$HOME/gpg-wrapper.sh"
+          chmod +x "$HOME/gpg-wrapper.sh"
+          dpkg-buildpackage -S -sa \
+            -k22EE8C9BEC025F3F0ADBC17289CF049935855E1E \
+            -p"$HOME/gpg-wrapper.sh"
           gpg --verify ../scrolllock-led-daemon_*_source.changes
 
       - name: Upload source package to Launchpad PPA
-        if: env.GPG_KEY != '' && env.LAUNCHPAD_KEY != ''
+        if: env.GPG_PRIVATE_KEY != '' && env.LAUNCHPAD_KEY != ''
         env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           LAUNCHPAD_KEY: ${{ secrets.LAUNCHPAD_SSH_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.LAUNCHPAD_SSH_KEY }}" > ~/.ssh/id_ed25519
+          printf '%s' "$LAUNCHPAD_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
           dput ppa:alan-n7x/tools ../scrolllock-led-daemon_*_source.changes

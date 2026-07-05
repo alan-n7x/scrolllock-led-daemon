@@ -1,16 +1,25 @@
-scrolllock-led-daemon (1.0.8-1) unstable; urgency=medium
+scrolllock-led-daemon (1.0.9-1) noble; urgency=medium
+
+  * Corrige source package para Launchpad PPA.
+  * Usa formato Debian 3.0 (quilt).
+  * Usa assinatura GPG não interativa no GitHub Actions.
+  * Corrige distribuição do changelog para Ubuntu PPA.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 01:00:00 -0300
+
+scrolllock-led-daemon (1.0.8-1) noble; urgency=medium
 
   * Configura gpg-agent com allow-loopback-pinentry para assinatura no CI.
 
  -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 00:45:00 -0300
 
-scrolllock-led-daemon (1.0.7-1) unstable; urgency=medium
+scrolllock-led-daemon (1.0.7-1) noble; urgency=medium
 
   * Gera .orig.tar.gz antes do debuild para evitar prompt interativo.
 
  -- Alan Santos <alan.profissional.dev@gmail.com>  Sun, 05 Jul 2026 00:40:00 -0300
 
-scrolllock-led-daemon (1.0.6-1) unstable; urgency=medium
+scrolllock-led-daemon (1.0.6-1) noble; urgency=medium
 
   * Usa debuild para gerar source package assinado para o Launchpad PPA.
 

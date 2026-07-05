@@ -2,7 +2,7 @@ Source: scrolllock-led-daemon
 Section: utils
 Priority: optional
 Maintainer: Alan Santos <alan.profissional.dev@gmail.com>
-Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, dh-sequence-bash-completion
+Build-Depends: debhelper-compat (= 13), dh-python, python3-all, python3-setuptools, dh-sequence-bash-completion, bash-completion:any
 Standards-Version: 4.6.2
 Homepage: https://github.com/alan-n7x/scrolllock-led-daemon
 Rules-Requires-Root: no
