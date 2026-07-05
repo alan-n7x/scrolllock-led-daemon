@@ -1,3 +1,13 @@
+scrolllock-led-daemon (1.0.2-1) unstable; urgency=medium
+
+  * CI/CD: separação ci.yml (testes) e release.yml (publicação).
+  * release.yml: PyPI publish, GitHub Release, PPA dput com GPG.
+  * Correção de timeout no debuild (sem GPG key).
+  * skip-existing no PyPI upload.
+  * fail_on_unmatched_files no GitHub Release.
+
+ -- Alan Santos <alan.profissional.dev@gmail.com>  Sat, 04 Jul 2026 21:35:00 -0300
+
 scrolllock-led-daemon (1.0.1-1) unstable; urgency=medium
 
   * CI/CD automatizado com GitHub Actions.

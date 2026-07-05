@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   release:
@@ -19,31 +20,48 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq build-essential debhelper dh-python python3-all python3-setuptools dh-sequence-bash-completion devscripts
+
       - name: Build PyPI package
         run: |
           pip install build
           python -m build
 
+      - name: Publish to PyPI
+        if: ${{ secrets.PYPI_API_TOKEN != '' }}
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
+
       - name: Build .deb package (binary)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq build-essential debhelper dh-python python3-all python3-setuptools
           dpkg-buildpackage -us -uc -b
 
-      - name: Install devscripts for source build
+      - name: Build Debian source package (unsigned)
         run: |
-          sudo apt-get install -y -qq devscripts
+          dpkg-buildpackage -S -sa -us -uc
+        continue-on-error: true
 
-      - name: Build Debian source package
+      - name: Import GPG key for signing
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' }}
         run: |
-          cd ..
-          debuild -S -sa -d
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --import --batch --yes
+          echo "${{ secrets.GPG_PASSPHRASE }}" | gpg --passphrase-fd 0 --pinentry-mode loopback --sign /dev/null 2>/dev/null || true
+
+      - name: Build signed Debian source package
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' && secrets.LAUNCHPAD_SSH_KEY != '' }}
+        run: |
+          rm -f ../scrolllock-led-daemon_*.dsc ../scrolllock-led-daemon_*.changes ../scrolllock-led-daemon_*.buildinfo
+          dpkg-buildpackage -S -sa
         env:
-          DEBEMAIL: "alan.profissional.dev@gmail.com"
-          DEBFULLNAME: "Alan Santos"
+          GPG_TTY: /dev/null
 
       - name: Upload source package to Launchpad PPA
-        if: ${{ secrets.LAUNCHPAD_SSH_KEY != '' }}
+        if: ${{ secrets.GPG_PRIVATE_KEY != '' && secrets.LAUNCHPAD_SSH_KEY != '' }}
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.LAUNCHPAD_SSH_KEY }}" > ~/.ssh/id_ed25519
@@ -53,7 +71,7 @@ jobs:
           dput ppa:alan-n7x/scrolllock-led-daemon ../scrolllock-led-daemon_*_source.changes
         continue-on-error: true
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: scrolllock-led-daemon ${{ github.ref_name }}
@@ -84,3 +102,4 @@ jobs:
             ../*.deb
             dist/*.whl
             dist/*.tar.gz
+          fail_on_unmatched_files: false
