@@ -79,7 +79,7 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ppa.launchpad.net >> ~/.ssh/known_hosts
           echo "signing_key = 89CF049935855E1E" >> ~/.dput.cf
-          dput ppa:alan-n7x/scrolllock-led-daemon ../scrolllock-led-daemon_*_source.changes
+          dput ppa:alan-n7x/tools ../scrolllock-led-daemon_*_source.changes
         continue-on-error: true
 
       - name: Create GitHub Release
@@ -92,7 +92,7 @@ jobs:
             ### Downloads
             - Python package (PyPI): `pip install scrolllock-led-daemon`
             - `.deb` package attached below for Debian/Ubuntu
-            - PPA: `sudo add-apt-repository ppa:alan-n7x/scrolllock-led-daemon`
+            - PPA: `sudo add-apt-repository ppa:alan-n7x/tools`
 
             ### Installation via .deb
             ```bash
@@ -102,7 +102,7 @@ jobs:
 
             ### Installation via PPA
             ```bash
-            sudo add-apt-repository ppa:alan-n7x/scrolllock-led-daemon
+            sudo add-apt-repository ppa:alan-n7x/tools
             sudo apt update
             sudo apt install scrolllock-led-daemon
             ```
