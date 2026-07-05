@@ -206,7 +206,7 @@ jobs:
             exit 1
           fi
 
-          dput "ppa:~${LP_LAUNCHPAD_ID}/tools" "$CHANGES_FILE"
+          dput "ppa:${LP_LAUNCHPAD_ID}/tools" "$CHANGES_FILE"
 
           echo "✅ Upload concluído para Launchpad PPA: ~${LP_LAUNCHPAD_ID}/tools"
           echo "🔗 Acompanhe o build em: https://launchpad.net/~${LP_LAUNCHPAD_ID}/+archive/ubuntu/tools"
