@@ -1,3 +1,10 @@
+## [1.4.5](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.4...v1.4.5) (2026-07-05)
+
+
+### Bug Fixes
+
+* corrige destino do upload para o Launchpad PPA ([c1e72ec](https://github.com/alan-n7x/scrolllock-led-daemon/commit/c1e72ecac2e4ec2e96a6cca449b1a3bb7df18035))
+
 ## [1.4.4](https://github.com/alan-n7x/scrolllock-led-daemon/compare/v1.4.3...v1.4.4) (2026-07-05)
 
 
