@@ -1,0 +1,8 @@
+1413aff537df93fa4123ebf058ff00f3  lib/systemd/system/scrolllock-led-daemon.service
+f761652862b28a7b9a3820f0ffe0d722  lib/udev/rules.d/99-scrolllock-led-daemon.rules
+b573465ea4798f2b70fd5bc705778a77  usr/bin/scrolllock-led-daemon
+340af62391d1c8573a831817e9cf0f81  usr/share/bash-completion/completions/scrolllock-led-daemon
+94f56c2ef6504a789352988003f0fe62  usr/share/doc/scrolllock-led-daemon/README.md
+e6d3703b6d64aea8ee2b008d46a6f754  usr/share/doc/scrolllock-led-daemon/changelog.Debian.gz
+827bc4e17adecee7f6b0bac455bec0de  usr/share/doc/scrolllock-led-daemon/copyright
+b9a6dfeabd18b0575bc5f66f76697e6a  usr/share/man/man8/scrolllock-led-daemon.8.gz

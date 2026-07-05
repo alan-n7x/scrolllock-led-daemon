@@ -1,5 +1,8 @@
 .PHONY: test test-verbose lint install uninstall clean help
 
+PREFIX ?= /usr
+DESTDIR ?=
+
 test:
 	PYTHONPATH=src python -m pytest tests/ -v
 
@@ -10,10 +13,13 @@ lint:
 	python -m py_compile src/scrolllock_led_daemon.py
 
 install:
-	sudo ./scripts/install.sh
+	install -Dm755 src/scrolllock_led_daemon.py $(DESTDIR)$(PREFIX)/bin/scrolllock-led-daemon
+	install -Dm644 systemd/scrolllock-led-daemon.service $(DESTDIR)/lib/systemd/system/scrolllock-led-daemon.service
+	install -Dm644 README.md $(DESTDIR)$(PREFIX)/share/doc/scrolllock-led-daemon/README.md
 
 uninstall:
-	sudo ./scripts/uninstall.sh
+	rm -f $(DESTDIR)$(PREFIX)/bin/scrolllock-led-daemon
+	rm -f $(DESTDIR)/lib/systemd/system/scrolllock-led-daemon.service
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
@@ -23,7 +29,7 @@ help:
 	@echo "Targets:"
 	@echo "  test          Run tests with pytest"
 	@echo "  lint          Check syntax with py_compile"
-	@echo "  install       Install the daemon (requires sudo)"
-	@echo "  uninstall     Uninstall the daemon (requires sudo)"
+	@echo "  install       Install into DESTDIR/PREFIX"
+	@echo "  uninstall     Remove installed files"
 	@echo "  clean         Remove __pycache__ directories"
 	@echo "  help          Show this message"

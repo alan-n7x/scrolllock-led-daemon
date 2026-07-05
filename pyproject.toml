@@ -1,9 +1,31 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "scrolllock-led-daemon"
 version = "1.0.0"
 description = "Daemon that synchronizes the Scroll Lock key with the keyboard LED on Linux."
 readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
 requires-python = ">=3.10"
+keywords = ["scrolllock", "led", "daemon", "keyboard", "linux"]
+authors = [
+    {name = "Alan Santos"}
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Hardware",
+]
 
 dependencies = [
     "evdev>=1.9.2"
@@ -14,3 +36,8 @@ test = ["pytest>=7.0"]
 
 [project.scripts]
 scrolllock-led-daemon = "scrolllock_led_daemon:main"
+
+[project.urls]
+Homepage = "https://github.com/alan-n7x/scrolllock-led-daemon"
+Repository = "https://github.com/alan-n7x/scrolllock-led-daemon"
+"Bug Tracker" = "https://github.com/alan-n7x/scrolllock-led-daemon/issues"

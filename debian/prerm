@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+
+case "$1" in
+    remove|deconfigure)
+        if command -v systemctl >/dev/null 2>&1; then
+            deb-systemd-helper stop scrolllock-led-daemon.service >/dev/null || true
+        fi
+        ;;
+esac

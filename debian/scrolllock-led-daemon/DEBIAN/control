@@ -1,0 +1,19 @@
+Package: scrolllock-led-daemon
+Version: 1.0.0-1
+Architecture: all
+Maintainer: Alan Santos <alan.profissional.dev@gmail.com>
+Installed-Size: 51
+Depends: python3:any, python3-evdev
+Section: utils
+Priority: optional
+Homepage: https://github.com/alan-n7x/scrolllock-led-daemon
+Description: Daemon that synchronizes the Scroll Lock key with the keyboard LED on Linux.
+ Scroll Lock LED Daemon listens for a key press and toggles the corresponding
+ keyboard LED. It runs as a background service managed by systemd, auto-detects
+ the keyboard, and supports configurable keys and LEDs. Features include:
+  - Auto-detects keyboard and Scroll Lock LED
+  - Listens for key presses and toggles the LED
+  - Runs as a systemd service (Type=notify)
+  - Auto-reconnects if the keyboard is disconnected
+  - One-shot mode: --set on/off and --toggle for scripts
+  - Configuration file support

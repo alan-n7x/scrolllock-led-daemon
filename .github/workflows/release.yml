@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build PyPI package
+        run: |
+          pip install build
+          python -m build
+
+      - name: Build .deb package
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq debhelper dh-python python3-all python3-setuptools
+          dpkg-buildpackage -us -uc -b
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: scrolllock-led-daemon ${{ github.ref_name }}
+          body: |
+            ## scrolllock-led-daemon ${{ github.ref_name }}
+
+            ### Downloads
+            - Python package (PyPI): `pip install scrolllock-led-daemon`
+            - `.deb` package attached below for Debian/Ubuntu
+
+            ### Installation via .deb
+            ```bash
+            sudo dpkg -i scrolllock-led-daemon_*.deb
+            sudo apt install -f
+            ```
+
+            ### Changelog
+            See [commits](https://github.com/alan-n7x/scrolllock-led-daemon/commits/${{ github.ref_name }}) for full changelog.
+          files: |
+            ../*.deb
+            dist/*.whl
+            dist/*.tar.gz

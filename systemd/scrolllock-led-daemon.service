@@ -5,7 +5,7 @@ After=multi-user.target
 [Service]
 Type=notify
 NotifyAccess=main
-ExecStart=/usr/local/bin/scrolllock-led-daemon
+ExecStart=/usr/bin/scrolllock-led-daemon
 Restart=on-failure
 RestartSec=2
 User=root

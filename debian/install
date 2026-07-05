@@ -1,0 +1,4 @@
+scrolllock-led-daemon.conf etc/
+systemd/scrolllock-led-daemon.service lib/systemd/system/
+99-scrolllock-led-daemon.rules lib/udev/rules.d/
+scrolllock-led-daemon.8 usr/share/man/man8/
