@@ -80,7 +80,11 @@ jobs:
             scrolllock-led-daemon
           cd scrolllock-led-daemon
           printf '%s\n' '#!/usr/bin/env bash' \
-            'exec gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" "$@"' \
+            'if [ -n "$GPG_PASSPHRASE" ]; then' \
+            '  exec gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" "$@"' \
+            'else' \
+            '  exec gpg --batch --yes --pinentry-mode loopback "$@"' \
+            'fi' \
             > "$HOME/gpg-wrapper.sh"
           chmod +x "$HOME/gpg-wrapper.sh"
           dpkg-buildpackage -S -sa -d \
